@@ -75,12 +75,17 @@ export const Constants = {
   OmniProcessObjectName: 'OmniProcess',
   OmniUiCardObjectName: 'OmniUiCard',
   OmniDataTransformObjectName: 'OmniDataTransform',
+  OmniScriptInstanceObjectName: 'OmniScriptInstance__c',
+  OmniScriptSavedSessionObjectName: 'OmniScriptSavedSession',
 
   // Config table names
   OmniScriptConfigTable: 'OmniScriptConfig',
   OmniIntegrationProcConfigTable: 'OmniIntegrationProcConfig',
   OmniDataTransformConfigTable: 'OmniDataTransformConfig',
   OmniUiCardConfigTable: 'OmniUiCardConfig',
+
+  // Display names
+  OmniScriptSavedSessionsDisplayName: 'OmniScript Saved Sessions',
 };
 
 export const Status = {
@@ -90,6 +95,7 @@ export const Status = {
   Complete: 'Complete',
   ReadyForMigration: 'Ready for migration',
   NeedsManualIntervention: 'Needs manual intervention',
+  Warnings: 'Warnings',
   ManualDeploymentNeeded: 'Manual deployment needed',
   SuccessfullyCompleted: 'Successfully Completed',
 };
