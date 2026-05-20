@@ -15,6 +15,7 @@ import { UX } from '@salesforce/command';
 export class OmniScriptMigrationTool extends BaseMigrationTool implements MigrationTool {
   private readonly exportType: OmniScriptExportType;
   private readonly allVersions: boolean;
+  private hasCpqAppHandlerHook: boolean = false;
 
   // Source Custom Object Names
   static readonly OMNISCRIPT_NAME = 'OmniScript__c';
@@ -38,6 +39,18 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
     super(namespace, connection, logger, messages, ux);
     this.exportType = exportType;
     this.allVersions = allVersions;
+  }
+
+  private async checkCpqAppHandlerHook(): Promise<boolean> {
+    try {
+      const objectName = `${this.namespacePrefix}CustomClassImplementation__c`;
+      const soql = `SELECT Id FROM ${objectName} WHERE Name = 'CpqAppHandlerHook' LIMIT 1`;
+      const result = await this.connection.query(soql);
+      return result.totalSize > 0;
+    } catch (e) {
+      this.logger.warn('Unable to query CustomClassImplementation__c for CpqAppHandlerHook: ' + e);
+      return false;
+    }
   }
 
   getName(): string {
@@ -163,6 +176,7 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
   async migrate(): Promise<MigrationResult[]> {
     // Get All Records from OmniScript__c (IP & OS Parent Records)
     const omniscripts = await this.getAllOmniScripts();
+    this.hasCpqAppHandlerHook = await this.checkCpqAppHandlerHook();
     const duplicatedNames = new Set<string>();
 
     // Variables to be returned After Migration
@@ -646,6 +660,14 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
             invalidIpReferences.set(mappedObject[ElementMappings.Name], key);
           }
           propertySet['integrationProcedureKey'] = newKey;
+        }
+        break;
+      case 'Remote Action':
+        if (this.hasCpqAppHandlerHook) {
+          const raRemoteOptions = propertySet['remoteOptions'] || {};
+          raRemoteOptions['PreHook'] = true;
+          raRemoteOptions['PostHook'] = true;
+          propertySet['remoteOptions'] = raRemoteOptions;
         }
         break;
       case 'DataRaptor Turbo Action':
