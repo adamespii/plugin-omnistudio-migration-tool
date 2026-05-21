@@ -424,9 +424,6 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
     // Track reserved keys found in PropertySet
     const foundReservedKeys = new Set<string>();
 
-    // Track elements with corrupted parent-child level hierarchy
-    const corruptedParentChildElements = new Set<string>();
-
     for (const elem of elements) {
       const elemName = elem['Name'];
       if (elementNames.has(elemName)) {
@@ -436,23 +433,8 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
       }
     }
 
-    // Build a map of element IDs to their levels for parent-child validation
-    const elementLevelMap = new Map<string, number>();
-    for (const elem of elements) {
-      elementLevelMap.set(elem['Id'], elem[this.getElementFieldKey('Level__c')]);
-    }
-
-    // Detect elements that have a ParentElementId but share the same level as their parent
-    for (const elem of elements) {
-      const parentId = elem[this.getElementFieldKey('ParentElementId__c')];
-      if (parentId && elementLevelMap.has(parentId)) {
-        const childLevel = elem[this.getElementFieldKey('Level__c')];
-        const parentLevel = elementLevelMap.get(parentId);
-        if (childLevel === parentLevel) {
-          corruptedParentChildElements.add(elem['Name']);
-        }
-      }
-    }
+    // Detect elements with corrupted parent-child level hierarchy
+    const corruptedParentChildElements = this.detectCorruptedParentChildElements(elements);
 
     for (const elem of elements) {
       const type = elem[this.getFieldKey('Type__c')];
@@ -725,7 +707,7 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
     // Add warning for corrupted parent-child level hierarchy (elements at same level as their parent)
     if (corruptedParentChildElements.size > 0) {
       const corruptedNamesList = Array.from(corruptedParentChildElements).join(', ');
-      warnings.unshift(this.messages.getMessage('corruptedParentChildLevel', [corruptedNamesList]));
+      warnings.push(this.messages.getMessage('corruptedParentChildLevel', [corruptedNamesList]));
       assessmentStatus = 'Needs manual intervention';
     }
 
@@ -2808,7 +2790,7 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
       if (parentId && elementLevelMap.has(parentId)) {
         const childLevel = elem[this.getElementFieldKey('Level__c')];
         const parentLevel = elementLevelMap.get(parentId);
-        if (childLevel === parentLevel) {
+        if (childLevel != null && parentLevel != null && childLevel === parentLevel) {
           corruptedElements.add(elem['Name']);
         }
       }
