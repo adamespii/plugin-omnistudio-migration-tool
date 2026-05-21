@@ -239,6 +239,7 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
     try {
       const exportComponentType = this.getName() as ComponentType;
       const omniscripts = await this.getAllOmniScripts();
+      this.hasCpqAppHandlerHook = await this.checkCpqAppHandlerHook();
 
       if (isStandardDataModelWithMetadataAPIEnabled()) {
         // For the Standard Data Model Orgs, we only need to prepare the storage
@@ -429,6 +430,7 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
     const namespaceErrors: string[] = [];
 
     //const missingRA: string[] = [];
+    const hookEnabledSteps: string[] = [];
 
     // Check for duplicate element names within the same OmniScript
     const elementNames = new Set<string>();
@@ -533,6 +535,9 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
           } else if (status === ApexResolveStatus.NOT_FOUND) {
             namespaceErrors.push(this.messages.getMessage('apexClassNotFound', [className, nameVal]));
           }
+        }
+        if (this.hasCpqAppHandlerHook) {
+          hookEnabledSteps.push(nameVal);
         }
       }
       // To handle radio , multiselect
@@ -761,6 +766,15 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
     const uniqueMissingIP = [...new Set(missingIP)];
     const uniqueMissingOS = [...new Set(missingOS)];
 
+    const infos: string[] = [];
+    if (hookEnabledSteps.length > 0) {
+      infos.push(
+        `PreHook/PostHook will be auto-enabled on ${
+          hookEnabledSteps.length
+        } Remote Action step(s): ${hookEnabledSteps.join(', ')}`
+      );
+    }
+
     const result: OSAssessmentInfo = {
       name: recordName,
       id: omniscript['Id'],
@@ -770,7 +784,7 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
       dependenciesOS: uniqueOS,
       dependenciesRemoteAction: uniqueRA,
       dependenciesLWC: uniqueLWC,
-      infos: [],
+      infos: infos,
       warnings: warnings,
       errors: [],
       migrationStatus: assessmentStatus,
