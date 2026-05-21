@@ -38,6 +38,21 @@ export const Constants = {
   DataAction: 'DataAction',
   CardAction: 'cardAction',
 
+  // FlexCard "Custom Web Page" navigation action targeting an OmniScript Universal Page
+  CustomActionType: 'Custom',
+  WebPageTargetType: 'Web Page',
+  OmniScriptUniversalPagePath: '/apex',
+  OmniScriptUniversalPageToken: 'OmniScriptUniversalPage',
+  OmniScriptTypeParam: 'OmniScriptType',
+  OmniScriptSubTypeParam: 'OmniScriptSubType',
+  OmniScriptLangParam: 'OmniScriptLang',
+  OmniScriptLayoutParam: 'layout',
+  OmniScriptStandardTypeParam: 'omniscript__type',
+  OmniScriptStandardSubTypeParam: 'omniscript__subType',
+  OmniScriptStandardLanguageParam: 'omniscript__language',
+  OmniScriptStandardThemeParam: 'omniscript__theme',
+  OmniScriptStandardPagePath: '/lightning/page/omnistudio/omniscript',
+
   // OmniScript element/action type constants
   IntegrationProcedureAction: 'Integration Procedure Action',
   DataRaptorTurboAction: 'DataRaptor Turbo Action',
