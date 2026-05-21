@@ -47,6 +47,7 @@ import { ApexNamespaceRegistry, ApexResolveStatus } from './ApexNamespaceRegistr
 export class OmniScriptMigrationTool extends BaseMigrationTool implements MigrationTool {
   private readonly exportType: OmniScriptExportType;
   private readonly allVersions: boolean;
+  private hasCpqAppHandlerHook: boolean = false;
   private IS_STANDARD_DATA_MODEL: boolean = isStandardDataModel();
   private readonly apexNamespaceRegistry: ApexNamespaceRegistry = ApexNamespaceRegistry.getInstance();
 
@@ -85,6 +86,18 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
     // Configure the shared Custom CSS registry. Idempotent — safe to call from
     // both the OS and IP tool instances within a single assess run.
     CustomCssRegistry.getInstance().init(connection, namespace, messages);
+  }
+
+  private async checkCpqAppHandlerHook(): Promise<boolean> {
+    try {
+      const objectName = `${this.namespacePrefix}CustomClassImplementation__c`;
+      const soql = `SELECT Id FROM ${objectName} WHERE Name = 'CpqAppHandlerHook' LIMIT 1`;
+      const result = await this.connection.query(soql);
+      return result.totalSize > 0;
+    } catch (e) {
+      Logger.warn('Unable to query CustomClassImplementation__c for CpqAppHandlerHook: ' + e);
+      return false;
+    }
   }
 
   getName(
@@ -918,6 +931,7 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
   async migrate(): Promise<MigrationResult[]> {
     // Get All Records from OmniScript__c (IP & OS Parent Records)
     const omniscripts = await this.getAllOmniScripts();
+    this.hasCpqAppHandlerHook = await this.checkCpqAppHandlerHook();
 
     if (isStandardDataModelWithMetadataAPIEnabled()) {
       return this.handleMigrationForStdDataModelOrgsWithMetadataAPIEnabled(omniscripts);
@@ -2449,6 +2463,13 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
 
     if (propSetMap.remoteClass) {
       propSetMap.remoteClass = this.apexNamespaceRegistry.getQualifiedClassName(propSetMap.remoteClass);
+    }
+
+    if (this.hasCpqAppHandlerHook) {
+      const remoteOptions = propSetMap['remoteOptions'] || {};
+      remoteOptions['PreHook'] = true;
+      remoteOptions['PostHook'] = true;
+      propSetMap['remoteOptions'] = remoteOptions;
     }
   }
 
