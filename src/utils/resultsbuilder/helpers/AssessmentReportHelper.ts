@@ -9,6 +9,7 @@ import { TemplateParser } from '../../templateParser/generate';
 import { getOrgDetailsForReport } from '../../reportGenerator/reportUtil';
 import { CustomLabelAssessmentInfo } from '../../customLabels';
 import { Logger } from '../../logger';
+import { stripHtml, escapeCSVValue } from '../../stringUtils';
 import { isFoundationPackage, isStandardDataModelWithMetadataAPIEnabled } from '../../dataModelService';
 import { OSAssessmentReporter } from '../OSAssessmentReporter';
 import { ApexAssessmentReporter } from '../ApexAssessmentReporter';
@@ -467,7 +468,7 @@ export class AssessmentReportHelper {
     const csvRows: string[] = [];
 
     // Add BOM for Excel UTF-8 compatibility
-    csvRows.push(headers.map((h) => this.escapeCSVValue(h)).join(','));
+    csvRows.push(headers.map((h) => escapeCSVValue(h)).join(','));
 
     // Sort labels by name for consistent ordering
     const sortedLabels = [...allLabels].sort((a, b) => a.name.localeCompare(b.name));
@@ -476,44 +477,18 @@ export class AssessmentReportHelper {
       const row = [
         label.name || '',
         label.packageId || '',
-        this.stripHtml(label.packageValue || ''),
+        stripHtml(label.packageValue || ''),
         label.coreId || '',
-        this.stripHtml(label.coreValue || ''),
+        stripHtml(label.coreValue || ''),
         label.assessmentStatus || '',
         label.summary || '',
       ];
-      csvRows.push(row.map((v) => this.escapeCSVValue(v)).join(','));
+      csvRows.push(row.map((v) => escapeCSVValue(v)).join(','));
     }
 
     const csvContent = '﻿' + csvRows.join('\n');
     fs.writeFileSync(path.join(basePath, fileName), csvContent, 'utf8');
     Logger.logVerbose(`Generated custom label CSV export: ${fileName} with ${allLabels.length} records`);
-  }
-
-  /**
-   * Strips HTML tags and decodes common entities for clean CSV values
-   */
-  private static stripHtml(str: string): string {
-    return str
-      .replace(/<[^>]*>/g, '')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'");
-  }
-
-  /**
-   * Escapes a value for CSV format
-   */
-  private static escapeCSVValue(value: string): string {
-    if (value == null) return '""';
-    const str = String(value);
-    if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
-      return `"${str.replace(/"/g, '""')}"`;
-    }
-    return str;
   }
 
   // =============================================================================

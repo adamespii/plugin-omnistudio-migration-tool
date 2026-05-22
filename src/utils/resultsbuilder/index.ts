@@ -32,7 +32,7 @@ import { TemplateParser } from '../templateParser/generate';
 import { createFilterGroupParam, createRowDataParam } from '../reportGenerator/reportUtil';
 import { FileDiffUtil } from '../lwcparser/fileutils/FileDiffUtil';
 import { Logger } from '../logger';
-import { getMigrationHeading } from '../stringUtils';
+import { getMigrationHeading, stripHtml, escapeCSVValue } from '../stringUtils';
 import { Constants, Status } from '../constants/stringContants';
 import { isStandardDataModel, isStandardDataModelWithMetadataAPIEnabled } from '../dataModelService';
 import { CustomLabelMigrationInfo, CustomLabelMigrationReporter } from './CustomLabelMigrationReporter';
@@ -370,7 +370,7 @@ export class ResultsBuilder {
     ];
     const csvRows: string[] = [];
 
-    csvRows.push(headers.map((h) => this.escapeCSVValue(h)).join(','));
+    csvRows.push(headers.map((h) => escapeCSVValue(h)).join(','));
 
     // Use allRecords if available (contains all labels including success), otherwise use data (errors only)
     if (result.allRecords && result.allRecords.size > 0) {
@@ -385,13 +385,13 @@ export class ResultsBuilder {
         const row = [
           record.labelName || '',
           record.packageInfo?.id || '',
-          this.stripHtml(record.packageInfo?.value || ''),
+          stripHtml(record.packageInfo?.value || ''),
           record.coreInfo?.id || '',
-          this.stripHtml(record.coreInfo?.value || ''),
+          stripHtml(record.coreInfo?.value || ''),
           status,
           record.message || '',
         ];
-        csvRows.push(row.map((v) => this.escapeCSVValue(v)).join(','));
+        csvRows.push(row.map((v) => escapeCSVValue(v)).join(','));
       }
     } else if (result.data) {
       const sortedData = [...result.data].sort((a, b) => a.name.localeCompare(b.name));
@@ -399,39 +399,19 @@ export class ResultsBuilder {
         const row = [
           record.name || '',
           record.packageInfo?.id || '',
-          this.stripHtml(record.packageInfo?.value || ''),
+          stripHtml(record.packageInfo?.value || ''),
           record.coreInfo?.id || '',
-          this.stripHtml(record.coreInfo?.value || ''),
+          stripHtml(record.coreInfo?.value || ''),
           record.status || '',
           record.message || '',
         ];
-        csvRows.push(row.map((v) => this.escapeCSVValue(v)).join(','));
+        csvRows.push(row.map((v) => escapeCSVValue(v)).join(','));
       }
     }
 
     const csvContent = '﻿' + csvRows.join('\n');
     fs.writeFileSync(path.join(resultsDir, fileName), csvContent, 'utf8');
     Logger.logVerbose(`Generated custom label migration CSV export: ${fileName}`);
-  }
-
-  private static stripHtml(str: string): string {
-    return str
-      .replace(/<[^>]*>/g, '')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'");
-  }
-
-  private static escapeCSVValue(value: string): string {
-    if (value == null) return '""';
-    const str = String(value);
-    if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
-      return `"${str.replace(/"/g, '""')}"`;
-    }
-    return str;
   }
 
   private static generateReportForRelatedObject(
