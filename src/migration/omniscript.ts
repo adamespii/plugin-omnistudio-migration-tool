@@ -47,7 +47,7 @@ import { ApexNamespaceRegistry, ApexResolveStatus } from './ApexNamespaceRegistr
 export class OmniScriptMigrationTool extends BaseMigrationTool implements MigrationTool {
   private readonly exportType: OmniScriptExportType;
   private readonly allVersions: boolean;
-  private hasCpqAppHandlerHook: boolean = false;
+  private hookRegisteredClasses: Set<string> = new Set();
   private IS_STANDARD_DATA_MODEL: boolean = isStandardDataModel();
   private readonly apexNamespaceRegistry: ApexNamespaceRegistry = ApexNamespaceRegistry.getInstance();
 
@@ -88,16 +88,31 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
     CustomCssRegistry.getInstance().init(connection, namespace, messages);
   }
 
-  private async checkCpqAppHandlerHook(): Promise<boolean> {
+  private async loadHookRegistrations(): Promise<Set<string>> {
     try {
       const objectName = `${this.namespacePrefix}CustomClassImplementation__c`;
-      const soql = `SELECT Id FROM ${objectName} WHERE Name = 'CpqAppHandlerHook' LIMIT 1`;
+      const soql = `SELECT Id, Name FROM ${objectName} WHERE Name LIKE '%Hook' LIMIT 200`;
       const result = await this.connection.query(soql);
-      return result.totalSize > 0;
+      const classes = new Set<string>();
+      if (result.totalSize > 0) {
+        for (const record of result.records as any[]) {
+          const hookName: string = record.Name || '';
+          if (hookName.endsWith('Hook')) {
+            classes.add(hookName.substring(0, hookName.length - 4));
+          }
+        }
+      }
+      return classes;
     } catch (e) {
-      Logger.warn('Unable to query CustomClassImplementation__c for CpqAppHandlerHook: ' + e);
-      return false;
+      Logger.warn('Unable to query CustomClassImplementation__c for hook registrations: ' + e);
+      return new Set();
     }
+  }
+
+  private hasHookForClass(remoteClass: string): boolean {
+    if (this.hookRegisteredClasses.size === 0 || !remoteClass) return false;
+    const simpleName = remoteClass.includes('.') ? remoteClass.split('.').pop() : remoteClass;
+    return this.hookRegisteredClasses.has(simpleName);
   }
 
   getName(
@@ -239,7 +254,7 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
     try {
       const exportComponentType = this.getName() as ComponentType;
       const omniscripts = await this.getAllOmniScripts();
-      this.hasCpqAppHandlerHook = await this.checkCpqAppHandlerHook();
+      this.hookRegisteredClasses = await this.loadHookRegistrations();
 
       if (isStandardDataModelWithMetadataAPIEnabled()) {
         // For the Standard Data Model Orgs, we only need to prepare the storage
@@ -536,7 +551,7 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
             namespaceErrors.push(this.messages.getMessage('apexClassNotFound', [className, nameVal]));
           }
         }
-        if (this.hasCpqAppHandlerHook) {
+        if (className && this.hasHookForClass(className)) {
           hookEnabledSteps.push(nameVal);
         }
       }
@@ -766,13 +781,10 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
     const uniqueMissingIP = [...new Set(missingIP)];
     const uniqueMissingOS = [...new Set(missingOS)];
 
-    const infos: string[] = [];
-    if (hookEnabledSteps.length > 0) {
-      infos.push(
-        `PreHook/PostHook will be auto-enabled on ${
-          hookEnabledSteps.length
-        } Remote Action step(s): ${hookEnabledSteps.join(', ')}`
-      );
+    if (hookEnabledSteps.length > 0 && omniProcessType === 'Integration Procedure') {
+      for (const stepName of hookEnabledSteps) {
+        warnings.push(this.messages.getMessage('prePostHookAutoEnabled', [stepName]));
+      }
     }
 
     const result: OSAssessmentInfo = {
@@ -784,7 +796,7 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
       dependenciesOS: uniqueOS,
       dependenciesRemoteAction: uniqueRA,
       dependenciesLWC: uniqueLWC,
-      infos: infos,
+      infos: [],
       warnings: warnings,
       errors: [],
       migrationStatus: assessmentStatus,
@@ -945,7 +957,7 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
   async migrate(): Promise<MigrationResult[]> {
     // Get All Records from OmniScript__c (IP & OS Parent Records)
     const omniscripts = await this.getAllOmniScripts();
-    this.hasCpqAppHandlerHook = await this.checkCpqAppHandlerHook();
+    this.hookRegisteredClasses = await this.loadHookRegistrations();
 
     if (isStandardDataModelWithMetadataAPIEnabled()) {
       return this.handleMigrationForStdDataModelOrgsWithMetadataAPIEnabled(omniscripts);
@@ -2479,7 +2491,7 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
       propSetMap.remoteClass = this.apexNamespaceRegistry.getQualifiedClassName(propSetMap.remoteClass);
     }
 
-    if (this.hasCpqAppHandlerHook) {
+    if (this.hasHookForClass(propSetMap.remoteClass)) {
       const remoteOptions = propSetMap['remoteOptions'] || {};
       remoteOptions['PreHook'] = true;
       remoteOptions['PostHook'] = true;

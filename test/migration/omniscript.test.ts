@@ -64,12 +64,16 @@ describe('OmniScriptMigrationTool - Remote Action PreHook/PostHook', () => {
     );
   }
 
-  function createRemoteActionElement(namespace: string, remoteOptions: Record<string, any> = {}): Record<string, any> {
+  function createRemoteActionElement(
+    namespace: string,
+    remoteOptions: Record<string, any> = {},
+    remoteClass: string = 'CpqAppHandler'
+  ): Record<string, any> {
     const prefix = namespace ? namespace + '__' : '';
     return {
       Id: 'elemId001',
       [`${prefix}Type__c`]: 'Remote Action',
-      [`${prefix}PropertySet__c`]: JSON.stringify({ remoteOptions }),
+      [`${prefix}PropertySet__c`]: JSON.stringify({ remoteOptions, remoteClass }),
       [`${prefix}OmniScriptId__c`]: 'osId001',
       [`${prefix}Level__c`]: 0,
       [`${prefix}ParentElementId__c`]: null,
@@ -113,7 +117,11 @@ describe('OmniScriptMigrationTool - Remote Action PreHook/PostHook', () => {
 
       mockConnection.query.callsFake((soql: string) => {
         if (soql.includes('CustomClassImplementation__c')) {
-          return Promise.resolve({ totalSize: 1, records: [{ Id: 'hookId001', Name: 'CpqAppHandlerHook' }] });
+          return Promise.resolve({
+            totalSize: 1,
+            records: [{ Id: 'hookId001', Name: 'CpqAppHandlerHook' }],
+            done: true,
+          });
         }
         if (soql.includes('OmniScript__c')) {
           return Promise.resolve({
@@ -266,7 +274,11 @@ describe('OmniScriptMigrationTool - Remote Action PreHook/PostHook', () => {
 
       mockConnection.query.callsFake((soql: string) => {
         if (soql.includes('CustomClassImplementation__c')) {
-          return Promise.resolve({ totalSize: 1, records: [{ Id: 'hookId001', Name: 'CpqAppHandlerHook' }] });
+          return Promise.resolve({
+            totalSize: 1,
+            records: [{ Id: 'hookId001', Name: 'CpqAppHandlerHook' }],
+            done: true,
+          });
         }
         if (soql.includes('OmniScript__c')) {
           return Promise.resolve({
@@ -342,7 +354,11 @@ describe('OmniScriptMigrationTool - Remote Action PreHook/PostHook', () => {
 
       mockConnection.query.callsFake((soql: string) => {
         if (soql.includes('CustomClassImplementation__c')) {
-          return Promise.resolve({ totalSize: 1, records: [{ Id: 'hookId001', Name: 'CpqAppHandlerHook' }] });
+          return Promise.resolve({
+            totalSize: 1,
+            records: [{ Id: 'hookId001', Name: 'CpqAppHandlerHook' }],
+            done: true,
+          });
         }
         if (soql.includes('OmniScript__c')) {
           return Promise.resolve({
