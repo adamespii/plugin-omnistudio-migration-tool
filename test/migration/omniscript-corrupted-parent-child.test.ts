@@ -45,7 +45,7 @@ describe('OmniScript — Corrupted Parent-Child Level Detection', () => {
     mockMessages = {
       getMessage: (key: string, args?: string[]) => {
         if (key === 'corruptedParentChildLevel') {
-          return `OmniScript has elements with corrupted parent-child hierarchy. The following elements have their parent and child persisted at the same level, which will cause data loss after migration: ${args?.[0]}. Create a new version of this OmniScript to fix the issue before migrating.`;
+          return `${args?.[0]} has elements with corrupted parent-child hierarchy. The following elements have their parent and child persisted at the same level, which will cause data loss after migration: ${args?.[1]}. Create a new version of this ${args?.[2]} to fix the issue before migrating.`;
         }
         return `Mock message: ${key}`;
       },

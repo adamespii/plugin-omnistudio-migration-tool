@@ -707,7 +707,9 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
     // Add warning for corrupted parent-child level hierarchy (elements at same level as their parent)
     if (corruptedParentChildElements.size > 0) {
       const corruptedNamesList = Array.from(corruptedParentChildElements).join(', ');
-      warnings.push(this.messages.getMessage('corruptedParentChildLevel', [corruptedNamesList]));
+      warnings.push(
+        this.messages.getMessage('corruptedParentChildLevel', [omniProcessType, corruptedNamesList, omniProcessType])
+      );
       assessmentStatus = 'Needs manual intervention';
     }
 
@@ -1021,7 +1023,13 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
           success: false,
           hasErrors: false,
           errors: [],
-          warnings: [this.messages.getMessage('corruptedParentChildLevel', [corruptedNamesList])],
+          warnings: [
+            this.messages.getMessage('corruptedParentChildLevel', [
+              omniProcessType,
+              corruptedNamesList,
+              omniProcessType,
+            ]),
+          ],
           newName: '',
           skipped: true,
         };
