@@ -412,11 +412,16 @@ export class AssessmentReportHelper {
     instanceUrl: string,
     omnistudioOrgDetails: OmnistudioOrgDetails,
     messages: Messages<string>,
-    template: string
+    template: string,
+    allCustomLabels?: CustomLabelAssessmentInfo[]
   ): void {
     const pageSize = 1000;
     const totalLabels = customLabels.length;
     const totalPages = Math.max(1, Math.ceil(totalLabels / pageSize));
+
+    // Generate CSV file with all labels (including success records) for export
+    const csvFileName = 'customlabel_assessment_export.csv';
+    this.generateCustomLabelCsvFile(basePath, csvFileName, allCustomLabels || customLabels);
 
     // Generate paginated reports
     for (let page = 1; page <= totalPages; page++) {
@@ -428,6 +433,9 @@ export class AssessmentReportHelper {
         pageSize
       );
 
+      // Pass CSV filename in props so the export button can download it
+      data.props = JSON.stringify({ csvFile: csvFileName });
+
       const html = TemplateParser.generate(template, data, messages);
 
       const pageFileName = totalPages > 1 ? `customlabel_assessment_Page_${page}_of_${totalPages}.html` : fileName;
@@ -437,6 +445,75 @@ export class AssessmentReportHelper {
         messages.getMessage('generatedCustomLabelAssessmentReportPage', [page, totalPages, data.rows.length])
       );
     }
+  }
+
+  /**
+   * Generates a CSV file containing all custom label data for export
+   */
+  private static generateCustomLabelCsvFile(
+    basePath: string,
+    fileName: string,
+    allLabels: CustomLabelAssessmentInfo[]
+  ): void {
+    const headers = [
+      'Name',
+      'Package - Id',
+      'Package - Value',
+      'Core - Id',
+      'Core - Value',
+      'Assessment Status',
+      'Summary',
+    ];
+    const csvRows: string[] = [];
+
+    // Add BOM for Excel UTF-8 compatibility
+    csvRows.push(headers.map((h) => this.escapeCSVValue(h)).join(','));
+
+    // Sort labels by name for consistent ordering
+    const sortedLabels = [...allLabels].sort((a, b) => a.name.localeCompare(b.name));
+
+    for (const label of sortedLabels) {
+      const row = [
+        label.name || '',
+        label.packageId || '',
+        this.stripHtml(label.packageValue || ''),
+        label.coreId || '',
+        this.stripHtml(label.coreValue || ''),
+        label.assessmentStatus || '',
+        label.summary || '',
+      ];
+      csvRows.push(row.map((v) => this.escapeCSVValue(v)).join(','));
+    }
+
+    const csvContent = '﻿' + csvRows.join('\n');
+    fs.writeFileSync(path.join(basePath, fileName), csvContent, 'utf8');
+    Logger.logVerbose(`Generated custom label CSV export: ${fileName} with ${allLabels.length} records`);
+  }
+
+  /**
+   * Strips HTML tags and decodes common entities for clean CSV values
+   */
+  private static stripHtml(str: string): string {
+    return str
+      .replace(/<[^>]*>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'");
+  }
+
+  /**
+   * Escapes a value for CSV format
+   */
+  private static escapeCSVValue(value: string): string {
+    if (value == null) return '""';
+    const str = String(value);
+    if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
   }
 
   // =============================================================================

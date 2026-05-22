@@ -319,6 +319,10 @@ export class ResultsBuilder {
 
     Logger.logVerbose(messages.getMessage('generatingCustomLabelsReport', [totalLabels, totalPages, pageSize]));
 
+    // Generate CSV file with all labels for export
+    const csvFileName = 'customlabel_migration_export.csv';
+    this.generateCustomLabelMigrationCsvFile(csvFileName, result);
+
     // Generate paginated reports
     for (let page = 1; page <= totalPages; page++) {
       const data = CustomLabelMigrationReporter.getCustomLabelMigrationData(
@@ -328,6 +332,9 @@ export class ResultsBuilder {
         page,
         pageSize
       );
+
+      // Pass CSV filename in props so the export button can download it
+      data.props = JSON.stringify({ csvFile: csvFileName });
 
       const reportTemplate = fs.readFileSync(reportTemplateFilePath, 'utf8');
 
@@ -345,6 +352,86 @@ export class ResultsBuilder {
 
       Logger.logVerbose(messages.getMessage('generatedCustomLabelsReportPage', [page, totalPages, data.rows.length]));
     }
+  }
+
+  /**
+   * Generates a CSV file containing all custom label migration data for export
+   */
+  // eslint-disable-next-line complexity
+  private static generateCustomLabelMigrationCsvFile(fileName: string, result: MigratedObject): void {
+    const headers = [
+      'Name',
+      'Package - Id',
+      'Package - Value',
+      'Core - Id',
+      'Core - Value',
+      'Migration Status',
+      'Summary',
+    ];
+    const csvRows: string[] = [];
+
+    csvRows.push(headers.map((h) => this.escapeCSVValue(h)).join(','));
+
+    // Use allRecords if available (contains all labels including success), otherwise use data (errors only)
+    if (result.allRecords && result.allRecords.size > 0) {
+      const sortedEntries = [...result.allRecords.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+      for (const [, record] of sortedEntries) {
+        const status =
+          record.cloneStatus === 'created'
+            ? 'Successfully migrated'
+            : record.cloneStatus === 'error'
+            ? 'Failed'
+            : 'Skipped';
+        const row = [
+          record.labelName || '',
+          record.packageInfo?.id || '',
+          this.stripHtml(record.packageInfo?.value || ''),
+          record.coreInfo?.id || '',
+          this.stripHtml(record.coreInfo?.value || ''),
+          status,
+          record.message || '',
+        ];
+        csvRows.push(row.map((v) => this.escapeCSVValue(v)).join(','));
+      }
+    } else if (result.data) {
+      const sortedData = [...result.data].sort((a, b) => a.name.localeCompare(b.name));
+      for (const record of sortedData) {
+        const row = [
+          record.name || '',
+          record.packageInfo?.id || '',
+          this.stripHtml(record.packageInfo?.value || ''),
+          record.coreInfo?.id || '',
+          this.stripHtml(record.coreInfo?.value || ''),
+          record.status || '',
+          record.message || '',
+        ];
+        csvRows.push(row.map((v) => this.escapeCSVValue(v)).join(','));
+      }
+    }
+
+    const csvContent = '﻿' + csvRows.join('\n');
+    fs.writeFileSync(path.join(resultsDir, fileName), csvContent, 'utf8');
+    Logger.logVerbose(`Generated custom label migration CSV export: ${fileName}`);
+  }
+
+  private static stripHtml(str: string): string {
+    return str
+      .replace(/<[^>]*>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'");
+  }
+
+  private static escapeCSVValue(value: string): string {
+    if (value == null) return '""';
+    const str = String(value);
+    if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
   }
 
   private static generateReportForRelatedObject(

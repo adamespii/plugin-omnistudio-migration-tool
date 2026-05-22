@@ -574,6 +574,19 @@ function exportTableToCSV(tableId) {
   const reportTable = document.getElementById(tableId);
   if (!reportTable) return;
 
+  // Check if props has a pre-generated CSV file to download (e.g., Custom Labels with all records)
+  if (props && props.csvFile) {
+    // Download the pre-generated CSV file
+    const link = document.createElement('a');
+    link.setAttribute('href', props.csvFile);
+    link.setAttribute('download', props.csvFile);
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    return;
+  }
+
   const table = reportTable.querySelector('table.slds-table');
   if (!table) return;
 
