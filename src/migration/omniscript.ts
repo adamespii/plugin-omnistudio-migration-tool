@@ -433,6 +433,9 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
       }
     }
 
+    // Detect elements with corrupted parent-child level hierarchy
+    const corruptedParentChildElements = this.detectCorruptedParentChildElements(elements);
+
     for (const elem of elements) {
       const type = elem[this.getFieldKey('Type__c')];
       const elemName = `${elem['Name']}`;
@@ -698,6 +701,15 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
     if (foundReservedKeys.size > 0) {
       const reservedKeysList = Array.from(foundReservedKeys).join(', ');
       warnings.unshift(this.messages.getMessage('reservedKeysFoundInPropertySet', [reservedKeysList]));
+      assessmentStatus = 'Needs manual intervention';
+    }
+
+    // Add warning for corrupted parent-child level hierarchy (elements at same level as their parent)
+    if (corruptedParentChildElements.size > 0) {
+      const corruptedNamesList = Array.from(corruptedParentChildElements).join(', ');
+      warnings.push(
+        this.messages.getMessage('corruptedParentChildLevel', [omniProcessType, corruptedNamesList, omniProcessType])
+      );
       assessmentStatus = 'Needs manual intervention';
     }
 
@@ -993,6 +1005,31 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
           hasErrors: false,
           errors: [],
           warnings: [this.messages.getMessage('invalidOrRepeatingOmniscriptElementNames', [duplicateNamesList])],
+          newName: '',
+          skipped: true,
+        };
+        osUploadInfo.set(recordId, skippedResponse);
+        originalOsRecords.set(recordId, omniscript);
+        continue;
+      }
+
+      // Check for corrupted parent-child level hierarchy (parent and child at same level)
+      const corruptedParentChildElements = this.detectCorruptedParentChildElements(elements);
+      if (corruptedParentChildElements.size > 0) {
+        const corruptedNamesList = Array.from(corruptedParentChildElements).join(', ');
+        const skippedResponse: UploadRecordResult = {
+          referenceId: recordId,
+          id: '',
+          success: false,
+          hasErrors: false,
+          errors: [],
+          warnings: [
+            this.messages.getMessage('corruptedParentChildLevel', [
+              omniProcessType,
+              corruptedNamesList,
+              omniProcessType,
+            ]),
+          ],
           newName: '',
           skipped: true,
         };
@@ -2735,6 +2772,39 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
         escalateStatus();
       }
     }
+  }
+
+  /**
+   * Detects elements that have a corrupted parent-child level hierarchy.
+   * In a valid OmniScript, a child element should always have a higher Level__c
+   * than its parent. When both parent and child are at the same level (typically level 0),
+   * it indicates data corruption that will cause elements to be lost during migration.
+   *
+   * @param elements - Array of element records queried from the OmniScript
+   * @returns Set of element names that have corrupted parent-child levels
+   */
+  private detectCorruptedParentChildElements(elements: AnyJson[]): Set<string> {
+    const corruptedElements = new Set<string>();
+
+    // Build a map of element IDs to their levels
+    const elementLevelMap = new Map<string, number>();
+    for (const elem of elements) {
+      elementLevelMap.set(elem['Id'], elem[this.getElementFieldKey('Level__c')]);
+    }
+
+    // Check each element: if it has a parent and both are at the same level, it's corrupted
+    for (const elem of elements) {
+      const parentId = elem[this.getElementFieldKey('ParentElementId__c')];
+      if (parentId && elementLevelMap.has(parentId)) {
+        const childLevel = elem[this.getElementFieldKey('Level__c')];
+        const parentLevel = elementLevelMap.get(parentId);
+        if (childLevel != null && parentLevel != null && childLevel === parentLevel) {
+          corruptedElements.add(elem['Name']);
+        }
+      }
+    }
+
+    return corruptedElements;
   }
 
   private getElementFieldKey(fieldName: string): string {

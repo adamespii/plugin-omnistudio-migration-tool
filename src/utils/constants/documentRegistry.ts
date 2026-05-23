@@ -31,4 +31,5 @@ export const documentRegistry = {
     'https://help.salesforce.com/s/articleView?id=xcloud.os_standard_set_up_your_environment_for_customizing_omniscript_elements.htm&type=5',
   customLabelMigrationErrorMessage:
     'https://help.salesforce.com/s/articleView?id=xcloud.os_migrate_oma_prereq.htm&type=5',
+  corruptedParentChildLevel: 'https://help.salesforce.com/s/articleView?id=xcloud.os_version_omniscripts.htm&type=5',
 };
