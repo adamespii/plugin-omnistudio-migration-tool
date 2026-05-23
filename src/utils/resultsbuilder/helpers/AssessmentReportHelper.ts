@@ -119,7 +119,7 @@ export class AssessmentReportHelper {
       summaryItems.push(this.createCustomLabelSummaryItem(result));
     }
     // Save for Later is included when it's in the reports array
-    if (reports.includes('sfl')) {
+    if (reports.includes(Constants.SaveForLater)) {
       summaryItems.push(this.createSaveForLaterSummaryItem(result, messages));
     }
 

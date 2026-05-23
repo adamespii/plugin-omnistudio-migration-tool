@@ -125,17 +125,18 @@ export interface SaveForLaterAssessmentInfo {
   omniScriptName: string;
   status: string;
   lastSaved: string;
-  migrationStatus: 'Ready for migration' | 'Failed' | 'Skipped' | 'Needs manual intervention' | 'Warnings';
+  migrationStatus: 'Failed' | 'Needs manual intervention' | 'Ready for migration' | 'Skipped' | 'Warnings';
   infos: string[];
-  warnings: string[];
+  dependenciesOS: string[];
   errors: string[];
+  warnings: string[];
   omniScriptMigrationStatus?:
-    | 'Ready for migration'
-    | 'Failed'
-    | 'Skipped'
     | 'Complete'
+    | 'Failed'
+    | 'Migration completed'
     | 'Needs manual intervention'
-    | 'Warnings';
+    | 'Ready for migration'
+    | 'Skipped';
 }
 
 export interface AssessmentInfo {
