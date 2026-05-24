@@ -320,6 +320,16 @@ export default class Assess extends SfCommand<AssessmentInfo> {
       case Constants.CustomLabel:
         await this.assessCustomLabels(assesmentInfo, namespace, conn);
         break;
+      case Constants.SaveForLater:
+        if (!isFoundationPackage()) {
+          // First assess OmniScripts to get dependency information
+          await this.assessOmniScripts(assesmentInfo, namespace, conn, allVersions, OmniScriptExportType.OS, ux);
+          // Then assess Save for Later with OmniScript info
+          await this.assessSaveForLater(assesmentInfo, namespace, conn, ux);
+        } else {
+          Logger.warn(messages.getMessage('saveForLaterNotSupportedInFoundationPackage'));
+        }
+        break;
       default:
         throw new Error(messages.getMessage('invalidOnlyFlag'));
     }
