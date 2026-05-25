@@ -421,8 +421,11 @@ export class AssessmentReportHelper {
     const totalPages = Math.max(1, Math.ceil(totalLabels / pageSize));
 
     // Generate CSV file with all labels (including success records) for export
-    const csvFileName = 'customlabel_assessment_export.csv';
-    this.generateCustomLabelCsvFile(basePath, csvFileName, allCustomLabels || customLabels);
+    this.generateCustomLabelCsvFile(
+      basePath,
+      Constants.CustomLabelAssessmentCsvFileName,
+      allCustomLabels || customLabels
+    );
 
     // Generate paginated reports
     for (let page = 1; page <= totalPages; page++) {
@@ -435,7 +438,7 @@ export class AssessmentReportHelper {
       );
 
       // Pass CSV filename in props so the export button can download it
-      data.props = JSON.stringify({ csvFile: csvFileName });
+      data.props = JSON.stringify({ csvFile: Constants.CustomLabelAssessmentCsvFileName });
 
       const html = TemplateParser.generate(template, data, messages);
 

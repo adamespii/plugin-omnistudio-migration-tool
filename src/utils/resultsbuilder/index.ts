@@ -320,8 +320,7 @@ export class ResultsBuilder {
     Logger.logVerbose(messages.getMessage('generatingCustomLabelsReport', [totalLabels, totalPages, pageSize]));
 
     // Generate CSV file with all labels for export
-    const csvFileName = 'customlabel_migration_export.csv';
-    this.generateCustomLabelMigrationCsvFile(csvFileName, result);
+    this.generateCustomLabelMigrationCsvFile(Constants.CustomLabelMigrationCsvFileName, result);
 
     // Generate paginated reports
     for (let page = 1; page <= totalPages; page++) {
@@ -334,7 +333,7 @@ export class ResultsBuilder {
       );
 
       // Pass CSV filename in props so the export button can download it
-      data.props = JSON.stringify({ csvFile: csvFileName });
+      data.props = JSON.stringify({ csvFile: Constants.CustomLabelMigrationCsvFileName });
 
       const reportTemplate = fs.readFileSync(reportTemplateFilePath, 'utf8');
 
