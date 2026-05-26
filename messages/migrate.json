@@ -342,5 +342,5 @@
   "processingNotRequired": "Migration is not required for orgs on standard data model with the Omnistudio Metadata setting turned on.",
   "skippingTruncation": "Skipping truncation as the org is on standard data model.",
   "loglevelFlagDeprecated": "loglevel is deprecated. Use --verbose instead.",
-  "prePostHookAutoEnabled": "PreHook/PostHook will be auto-enabled on Remote Action step '%s' during migration because a hook implementation is registered for its remote class."
+  "prePostHookAutoEnabled": "PreHook/PostHook will be auto-enabled on Remote Action step(s): %s. A hook implementation is registered for the remote class used by these steps."
 }

@@ -254,7 +254,9 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
     try {
       const exportComponentType = this.getName() as ComponentType;
       const omniscripts = await this.getAllOmniScripts();
-      this.hookRegisteredClasses = await this.loadHookRegistrations();
+      if (this.exportType !== OmniScriptExportType.OS) {
+        this.hookRegisteredClasses = await this.loadHookRegistrations();
+      }
 
       if (isStandardDataModelWithMetadataAPIEnabled()) {
         // For the Standard Data Model Orgs, we only need to prepare the storage
@@ -782,9 +784,7 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
     const uniqueMissingOS = [...new Set(missingOS)];
 
     if (hookEnabledSteps.length > 0 && omniProcessType === 'Integration Procedure') {
-      for (const stepName of hookEnabledSteps) {
-        warnings.push(this.messages.getMessage('prePostHookAutoEnabled', [stepName]));
-      }
+      warnings.push(this.messages.getMessage('prePostHookAutoEnabled', [hookEnabledSteps.join(', ')]));
     }
 
     const result: OSAssessmentInfo = {
@@ -957,7 +957,9 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
   async migrate(): Promise<MigrationResult[]> {
     // Get All Records from OmniScript__c (IP & OS Parent Records)
     const omniscripts = await this.getAllOmniScripts();
-    this.hookRegisteredClasses = await this.loadHookRegistrations();
+    if (this.exportType !== OmniScriptExportType.OS) {
+      this.hookRegisteredClasses = await this.loadHookRegistrations();
+    }
 
     if (isStandardDataModelWithMetadataAPIEnabled()) {
       return this.handleMigrationForStdDataModelOrgsWithMetadataAPIEnabled(omniscripts);
