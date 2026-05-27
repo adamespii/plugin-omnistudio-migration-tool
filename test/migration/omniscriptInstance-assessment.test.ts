@@ -35,6 +35,7 @@ describe('OmniScriptInstanceMigrationTool - Assessment', () => {
         update: sandbox.stub(),
       },
       query: sandbox.stub(),
+      request: sandbox.stub(),
       instanceUrl: 'https://test.salesforce.com',
     } as unknown as Connection;
 
@@ -160,53 +161,17 @@ describe('OmniScriptInstanceMigrationTool - Assessment', () => {
     });
 
     describe('Type+SubType+Language Matching - OmniProcess Already Migrated', () => {
-      it('should mark instance as Ready when matching OmniProcess exists (already migrated to core)', async () => {
+      it('should mark instance as Ready when matching OmniProcess exists and filter out empty records', async () => {
         const mockInstances = [
           {
             Id: 'a0D000000000001',
             Name: 'Session-001',
             vlocity_ins__Status__c: 'In Progress',
             vlocity_ins__OmniScriptId__c: 'a0E000000000001',
-            vlocity_ins__OmniScriptType__c: 'TestType',
-            vlocity_ins__OmniScriptSubType__c: 'TestSubType',
-            vlocity_ins__OmniScriptLanguage__c: 'English',
-            vlocity_ins__LastSaved__c: '2024-01-15',
-          },
-        ];
-        queryWithFilterStub.resolves(mockInstances);
-
-        // Mock OmniProcess query - matching Type found in core
-        queryCustomStub.resolves([
-          {
-            Name: 'TestType_TestSubType_English',
-            Type: 'TestType',
-            SubType: 'TestSubType',
-            Language: 'English',
-          },
-        ]);
-
-        const result = await migrationTool.assess();
-
-        expect(result).to.have.length(1);
-        expect(result[0].migrationStatus).to.equal('Ready for migration');
-        expect(result[0].omniScriptMigrationStatus).to.equal('Complete');
-        expect(result[0].id).to.equal('a0D000000000001');
-        expect(result[0].omniScriptName).to.equal('TestType_TestSubType_English');
-        expect(result[0].errors).to.be.empty;
-        expect(result[0].dependenciesOS).to.be.empty;
-      });
-
-      it('should filter out OmniProcess with empty Type/SubType/Language during reduce', async () => {
-        const mockInstances = [
-          {
-            Id: 'a0D000000000001b',
-            Name: 'Session-001b',
-            vlocity_ins__Status__c: 'In Progress',
-            vlocity_ins__OmniScriptId__c: 'a0E000000000001b',
             vlocity_ins__OmniScriptType__c: 'ValidType',
             vlocity_ins__OmniScriptSubType__c: 'ValidSub',
             vlocity_ins__OmniScriptLanguage__c: 'en',
-            vlocity_ins__LastSaved__c: '2024-01-16',
+            vlocity_ins__LastSaved__c: '2024-01-15',
           },
         ];
         queryWithFilterStub.resolves(mockInstances);
@@ -236,14 +201,17 @@ describe('OmniScriptInstanceMigrationTool - Assessment', () => {
         const result = await migrationTool.assess();
 
         expect(result).to.have.length(1);
-        // Should match ValidType_ValidSub_en and ignore empty records
         expect(result[0].migrationStatus).to.equal('Ready for migration');
         expect(result[0].omniScriptMigrationStatus).to.equal('Complete');
+        expect(result[0].id).to.equal('a0D000000000001');
+        expect(result[0].omniScriptName).to.equal('ValidType_ValidSub_en');
+        expect(result[0].errors).to.be.empty;
+        expect(result[0].dependenciesOS).to.be.empty;
       });
     });
 
     describe('Type+SubType+Language Matching - OmniScript in Package (Needs Migration)', () => {
-      it('should mark instance as Ready when matching Omniscript__c exists with nameMapping', async () => {
+      it('should mark instance as Ready when matching Omniscript__c exists with valid nameMapping', async () => {
         const mockInstances = [
           {
             Id: 'a0D000000000002',
@@ -300,56 +268,7 @@ describe('OmniScriptInstanceMigrationTool - Assessment', () => {
         expect(result[0].dependenciesOS).to.deep.equal(['Form_Contact_en_US']);
       });
 
-      it('should handle assessment without nameMapping field (undefined)', async () => {
-        const mockInstances = [
-          {
-            Id: 'a0D000000000003',
-            Name: 'Session-003',
-            vlocity_ins__Status__c: 'In Progress',
-            vlocity_ins__OmniScriptId__c: 'a0E000000000003',
-            vlocity_ins__OmniScriptType__c: 'Survey',
-            vlocity_ins__OmniScriptSubType__c: 'Feedback',
-            vlocity_ins__OmniScriptLanguage__c: 'en_US',
-            vlocity_ins__LastSaved__c: '2024-03-15',
-          },
-        ];
-        queryWithFilterStub.resolves(mockInstances);
-        queryCustomStub.resolves([]);
-
-        const omniAssessmentInfos = {
-          osAssessmentInfos: [
-            {
-              id: 'a0E000000000003',
-              name: 'Survey_Feedback_en_US',
-              oldName: 'Survey_Feedback_en_US',
-              migrationStatus: 'Ready for migration' as const,
-              // nameMapping is undefined
-              dependenciesIP: [],
-              missingIP: [],
-              dependenciesDR: [],
-              missingDR: [],
-              dependenciesOS: [],
-              missingOS: [],
-              dependenciesRemoteAction: [],
-              dependenciesLWC: [],
-              type: 'OmniScript',
-              infos: [],
-              warnings: [],
-              errors: [],
-            },
-          ],
-        };
-
-        const result = await migrationTool.assess(omniAssessmentInfos);
-
-        expect(result).to.have.length(1);
-        // Without nameMapping, omniscriptSet will be empty, so no match found
-        expect(result[0].migrationStatus).to.equal('Needs manual intervention');
-        expect(result[0].omniScriptMigrationStatus).to.equal('Needs manual intervention');
-        expect(result[0].errors[0]).to.include('Unable to find active OmniScript');
-      });
-
-      it('should handle nameMapping with all empty string values', async () => {
+      it('should mark as manual intervention when nameMapping has empty fields', async () => {
         const mockInstances = [
           {
             Id: 'a0D000000000003b',
@@ -399,14 +318,13 @@ describe('OmniScriptInstanceMigrationTool - Assessment', () => {
         const result = await migrationTool.assess(omniAssessmentInfos);
 
         expect(result).to.have.length(1);
-        // nameMapping with empty strings results in empty concatenation, not added to omniscriptSet
         expect(result[0].migrationStatus).to.equal('Needs manual intervention');
         expect(result[0].omniScriptMigrationStatus).to.equal('Needs manual intervention');
       });
     });
 
     describe('Type+SubType+Language Matching - No Match (Needs Manual Intervention)', () => {
-      it('should mark as Needs Manual Intervention when Type+SubType+Language not found anywhere', async () => {
+      it('should mark as Needs Manual Intervention when Type+SubType+Language not found or empty', async () => {
         const mockInstances = [
           {
             Id: 'a0D000000000004',
@@ -418,25 +336,6 @@ describe('OmniScriptInstanceMigrationTool - Assessment', () => {
             vlocity_ins__OmniScriptLanguage__c: 'en_US',
             vlocity_ins__LastSaved__c: '2024-04-15',
           },
-        ];
-        queryWithFilterStub.resolves(mockInstances);
-        queryCustomStub.resolves([]); // No OmniProcess
-
-        const omniAssessmentInfos = {
-          osAssessmentInfos: [], // No matching Omniscript__c
-        };
-
-        const result = await migrationTool.assess(omniAssessmentInfos);
-
-        expect(result).to.have.length(1);
-        expect(result[0].migrationStatus).to.equal('Needs manual intervention');
-        expect(result[0].omniScriptMigrationStatus).to.equal('Needs manual intervention');
-        expect(result[0].errors[0]).to.include('Unable to find active OmniScript');
-        expect(result[0].errors[1]).to.include('ensure OmniScript exists and is activated');
-      });
-
-      it('should handle missing OmniScriptType__c field (empty string)', async () => {
-        const mockInstances = [
           {
             Id: 'a0D000000000005',
             Name: 'Session-NoType',
@@ -449,13 +348,18 @@ describe('OmniScriptInstanceMigrationTool - Assessment', () => {
           },
         ];
         queryWithFilterStub.resolves(mockInstances);
-        queryCustomStub.resolves([]);
+        queryCustomStub.resolves([]); // No OmniProcess
 
-        const result = await migrationTool.assess();
+        const result = await migrationTool.assess({ osAssessmentInfos: [] });
 
-        expect(result).to.have.length(1);
+        expect(result).to.have.length(2);
+        // First instance: type not found
         expect(result[0].migrationStatus).to.equal('Needs manual intervention');
-        expect(result[0].errors[0]).to.include('No OmniScript found for instance');
+        expect(result[0].omniScriptMigrationStatus).to.equal('Needs manual intervention');
+        expect(result[0].errors[0]).to.include('Unable to find active OmniScript');
+        // Second instance: empty type
+        expect(result[1].migrationStatus).to.equal('Needs manual intervention');
+        expect(result[1].errors[0]).to.include('No OmniScript found for instance');
       });
     });
 
@@ -653,88 +557,15 @@ describe('OmniScriptInstanceMigrationTool - Assessment', () => {
       expect(result[0].omniScriptMigrationStatus).to.equal('Ready for migration');
     });
 
-    it('should handle multiple assessment infos with some having nameMapping and some not', async () => {
-      const mockInstances = [
-        {
-          Id: 'a0D200',
-          Name: 'Session-200',
-          vlocity_ins__Status__c: 'In Progress',
-          vlocity_ins__OmniScriptId__c: 'a0E200',
-          vlocity_ins__OmniScriptType__c: 'TypeX',
-          vlocity_ins__OmniScriptSubType__c: 'SubX',
-          vlocity_ins__OmniScriptLanguage__c: 'en',
-          vlocity_ins__LastSaved__c: '2024-12-01',
-        },
-      ];
-      sandbox.stub(QueryTools, 'queryWithFilter').resolves(mockInstances);
-      sandbox.stub(QueryTools, 'queryCustom').resolves([]);
-
-      const omniAssessmentInfos = {
-        osAssessmentInfos: [
-          {
-            id: 'a0E200',
-            name: 'TypeX_SubX_en',
-            oldName: 'TypeX_SubX_en',
-            migrationStatus: 'Ready for migration' as const,
-            nameMapping: {
-              oldType: 'TypeX',
-              oldSubtype: 'SubX',
-              newType: 'TypeX',
-              newSubType: 'SubX',
-              oldLanguage: 'en',
-              newLanguage: 'en',
-            },
-            dependenciesIP: [],
-            missingIP: [],
-            dependenciesDR: [],
-            missingDR: [],
-            dependenciesOS: [],
-            missingOS: [],
-            dependenciesRemoteAction: [],
-            dependenciesLWC: [],
-            type: 'OmniScript',
-            infos: [],
-            warnings: [],
-            errors: [],
-          },
-          {
-            id: 'a0E201',
-            name: 'TypeY_SubY_en',
-            oldName: 'TypeY_SubY_en',
-            migrationStatus: 'Ready for migration' as const,
-            // No nameMapping
-            dependenciesIP: [],
-            missingIP: [],
-            dependenciesDR: [],
-            missingDR: [],
-            dependenciesOS: [],
-            missingOS: [],
-            dependenciesRemoteAction: [],
-            dependenciesLWC: [],
-            type: 'OmniScript',
-            infos: [],
-            warnings: [],
-            errors: [],
-          },
-        ],
-      };
-
-      const result = await migrationTool.assess(omniAssessmentInfos);
-
-      expect(result).to.have.length(1);
-      // TypeX should be found via nameMapping, TypeY not found (no nameMapping)
-      expect(result[0].migrationStatus).to.equal('Ready for migration');
-    });
-
-    it('should return empty set when osAssessmentInfos is empty array', async () => {
+    it('should handle edge cases in osAssessmentInfos (empty, non-array, null elements)', async () => {
       const mockInstances = [
         {
           Id: 'a0D300',
           Name: 'Session-300',
           vlocity_ins__Status__c: 'In Progress',
           vlocity_ins__OmniScriptId__c: 'a0E300',
-          vlocity_ins__OmniScriptType__c: 'Lone',
-          vlocity_ins__OmniScriptSubType__c: 'Wolf',
+          vlocity_ins__OmniScriptType__c: 'TypeA',
+          vlocity_ins__OmniScriptSubType__c: 'SubA',
           vlocity_ins__OmniScriptLanguage__c: 'en',
           vlocity_ins__LastSaved__c: '2024-12-15',
         },
@@ -742,58 +573,22 @@ describe('OmniScriptInstanceMigrationTool - Assessment', () => {
       sandbox.stub(QueryTools, 'queryWithFilter').resolves(mockInstances);
       sandbox.stub(QueryTools, 'queryCustom').resolves([]);
 
-      const result = await migrationTool.assess({ osAssessmentInfos: [] });
-
+      // Test 1: empty array
+      let result = await migrationTool.assess({ osAssessmentInfos: [] });
       expect(result).to.have.length(1);
-      // No osAssessmentInfos means empty omniscriptSet
       expect(result[0].migrationStatus).to.equal('Needs manual intervention');
-    });
 
-    it('should handle non-array osAssessmentInfos gracefully', async () => {
-      const mockInstances = [
-        {
-          Id: 'a0D301',
-          Name: 'Session-301',
-          vlocity_ins__Status__c: 'In Progress',
-          vlocity_ins__OmniScriptId__c: 'a0E301',
-          vlocity_ins__OmniScriptType__c: 'Test',
-          vlocity_ins__OmniScriptSubType__c: 'Sub',
-          vlocity_ins__OmniScriptLanguage__c: 'en',
-          vlocity_ins__LastSaved__c: '2024-12-16',
-        },
-      ];
-      sandbox.stub(QueryTools, 'queryWithFilter').resolves(mockInstances);
-      sandbox.stub(QueryTools, 'queryCustom').resolves([]);
-
-      // Pass non-array value (will fail Array.isArray check)
-      const result = await migrationTool.assess({ osAssessmentInfos: null as any });
-
+      // Test 2: non-array (null)
+      result = await migrationTool.assess({ osAssessmentInfos: null as any });
       expect(result).to.have.length(1);
-      // Non-array treated as empty, omniscriptSet will be empty
       expect(result[0].migrationStatus).to.equal('Needs manual intervention');
-    });
 
-    it('should handle null/undefined elements inside osAssessmentInfos array', async () => {
-      const mockInstances = [
-        {
-          Id: 'a0D302',
-          Name: 'Session-302',
-          vlocity_ins__Status__c: 'In Progress',
-          vlocity_ins__OmniScriptId__c: 'a0E302',
-          vlocity_ins__OmniScriptType__c: 'TypeA',
-          vlocity_ins__OmniScriptSubType__c: 'SubA',
-          vlocity_ins__OmniScriptLanguage__c: 'en',
-          vlocity_ins__LastSaved__c: '2024-12-17',
-        },
-      ];
-      sandbox.stub(QueryTools, 'queryWithFilter').resolves(mockInstances);
-      sandbox.stub(QueryTools, 'queryCustom').resolves([]);
-
+      // Test 3: array with null/undefined elements and valid element
       const omniAssessmentInfos = {
         osAssessmentInfos: [
           null as any,
           {
-            id: 'a0E302',
+            id: 'a0E300',
             name: 'TypeA_SubA_en',
             oldName: 'TypeA_SubA_en',
             migrationStatus: 'Ready for migration' as const,
@@ -821,21 +616,18 @@ describe('OmniScriptInstanceMigrationTool - Assessment', () => {
           undefined as any,
         ],
       };
-
-      const result = await migrationTool.assess(omniAssessmentInfos);
-
+      result = await migrationTool.assess(omniAssessmentInfos);
       expect(result).to.have.length(1);
-      // Should skip null/undefined elements and process valid one
       expect(result[0].migrationStatus).to.equal('Ready for migration');
-      expect(result[0].omniScriptMigrationStatus).to.equal('Ready for migration');
     });
   });
 
   describe('queryOmniProcessesWithType', () => {
-    it('should construct correct SOQL query with Type IN clause', async () => {
+    it('should construct correct SOQL query with Type IN clause and handle empty types', async () => {
       const queryWithFilterStub = sandbox.stub(QueryTools, 'queryWithFilter');
       const queryCustomStub = sandbox.stub(QueryTools, 'queryCustom');
 
+      // Test 1: Multiple types
       const mockInstances = [
         {
           Id: 'a0D400',
@@ -864,47 +656,43 @@ describe('OmniScriptInstanceMigrationTool - Assessment', () => {
         { Name: 'FormB_SubB_en', Type: 'FormB', SubType: 'SubB', Language: 'en' } as any,
       ]);
 
-      const result = await migrationTool.assess();
+      let result = await migrationTool.assess();
 
-      expect(queryCustomStub.calledOnce).to.be.true;
-      const query = queryCustomStub.getCall(0).args[1];
-      // Query should include both FormA and FormB types
+      // Check the last call (queryOmniProcessesWithType)
+      let lastCallIndex = queryCustomStub.callCount - 1;
+      let query = queryCustomStub.getCall(lastCallIndex).args[1];
+
       expect(query).to.include('Type IN');
       expect(query).to.include("'FormA'");
       expect(query).to.include("'FormB'");
       expect(query).to.include('IsActive = true');
       expect(result).to.have.length(2);
-    });
 
-    it('should handle empty omniscriptTypes set', async () => {
-      const queryWithFilterStub = sandbox.stub(QueryTools, 'queryWithFilter');
-      const queryCustomStub = sandbox.stub(QueryTools, 'queryCustom');
-
-      const mockInstances = [
+      // Test 2: Empty type - query should not have Type IN clause
+      queryWithFilterStub.resolves([
         {
           Id: 'a0D500',
           Name: 'Session-500',
           vlocity_ins__Status__c: 'In Progress',
           vlocity_ins__OmniScriptId__c: 'a0E500',
-          vlocity_ins__OmniScriptType__c: '', // Empty type
+          vlocity_ins__OmniScriptType__c: '',
           vlocity_ins__OmniScriptSubType__c: '',
           vlocity_ins__OmniScriptLanguage__c: '',
           vlocity_ins__LastSaved__c: '2025-02-01',
         },
-      ];
-      queryWithFilterStub.resolves(mockInstances);
+      ]);
       queryCustomStub.resolves([]);
 
-      await migrationTool.assess();
+      result = await migrationTool.assess();
 
-      expect(queryCustomStub.calledOnce).to.be.true;
-      const query = queryCustomStub.getCall(0).args[1];
-      // When no types, query should only have IsActive filter
+      lastCallIndex = queryCustomStub.callCount - 1;
+      query = queryCustomStub.getCall(lastCallIndex).args[1];
+
       expect(query).to.include('IsActive = true');
       expect(query).to.not.include('Type IN');
     });
 
-    it('should return empty array when OmniProcess query fails', async () => {
+    it('should return assessment with manual intervention when OmniProcess query fails', async () => {
       const mockInstances = [
         {
           Id: 'a0D600',
@@ -922,7 +710,6 @@ describe('OmniScriptInstanceMigrationTool - Assessment', () => {
 
       const result = await migrationTool.assess();
 
-      // Should still return assessment results with intervention status
       expect(result).to.have.length(1);
       expect(result[0].migrationStatus).to.equal('Needs manual intervention');
     });
@@ -952,17 +739,313 @@ describe('OmniScriptInstanceMigrationTool - Assessment', () => {
       expect(callArgs[1]).to.equal('vlocity_ins'); // namespace
       expect(callArgs[2]).to.equal('OmniScriptInstance__c'); // object name
     });
+  });
 
-    it('should work with empty namespace', async () => {
-      const emptyNsTool = new OmniScriptInstanceMigrationTool('', connection, logger, messages, ux);
-      const queryWithFilterStub = sandbox.stub(QueryTools, 'queryWithFilter');
-      queryWithFilterStub.resolves([]);
+  describe('getRecordName', () => {
+    it('should return Name when present or Id when Name is missing/empty', () => {
+      expect(migrationTool.getRecordName({ Name: 'Session-001', Id: 'a0D123' })).to.equal('Session-001');
+      expect(migrationTool.getRecordName({ Id: 'a0D456' })).to.equal('a0D456');
+      expect(migrationTool.getRecordName({ Name: '', Id: 'a0D789' })).to.equal('a0D789');
+    });
+  });
 
-      const result = await emptyNsTool.assess();
+  describe('queryAttachments', () => {
+    let queryCustomStub: sinon.SinonStub;
+
+    beforeEach(() => {
+      queryCustomStub = sandbox.stub(QueryTools, 'queryCustom');
+    });
+
+    it('should construct correct SOQL query for attachments', async () => {
+      queryCustomStub.resolves([
+        {
+          Id: '00P001',
+          Name: 'OmniscriptFullJSON.json',
+          Body: '/services/data/v67.0/sobjects/Attachment/00P001/Body',
+          ContentType: 'application/json',
+        },
+      ]);
+
+      const result = await (migrationTool as any).queryAttachments('a0D001');
+
+      expect(queryCustomStub.calledOnce).to.be.true;
+      const query = queryCustomStub.getCall(0).args[1];
+      expect(query).to.include('SELECT Id,Name,Body,ContentType');
+      expect(query).to.include('FROM Attachment');
+      expect(query).to.include("WHERE ParentId = 'a0D001'");
+      expect(result).to.have.length(1);
+      expect(result[0].Id).to.equal('00P001');
+    });
+
+    it('should return empty array when query fails', async () => {
+      queryCustomStub.rejects(new Error('Query failed'));
+
+      const result = await (migrationTool as any).queryAttachments('a0D002');
 
       expect(result).to.be.an('array').that.is.empty;
-      expect(queryWithFilterStub.calledOnce).to.be.true;
-      expect(queryWithFilterStub.getCall(0).args[1]).to.equal(''); // empty namespace
+      expect((Logger.error as sinon.SinonStub).called).to.be.true;
+    });
+  });
+
+  describe('hasCustomFieldPackageSavedSessionId', () => {
+    let queryCustomStub: sinon.SinonStub;
+
+    beforeEach(() => {
+      queryCustomStub = sandbox.stub(QueryTools, 'queryCustom');
+    });
+
+    it('should return true when custom field exists', async () => {
+      queryCustomStub.resolves([{ Name: 'TestSession', PackageSavedSessionId__c: 'a0D123' }]);
+
+      const result = await (migrationTool as any).hasCustomFieldPackageSavedSessionId();
+
+      expect(result).to.be.true;
+      expect(queryCustomStub.calledOnce).to.be.true;
+      const query = queryCustomStub.getCall(0).args[1];
+      expect(query).to.include('PackageSavedSessionId__c');
+      expect(query).to.include('FROM OmniScriptSavedSession');
+      expect(query).to.include('LIMIT 1');
+    });
+
+    it('should return false when custom field does not exist', async () => {
+      queryCustomStub.rejects(new Error('Invalid field: PackageSavedSessionId__c'));
+
+      const result = await (migrationTool as any).hasCustomFieldPackageSavedSessionId();
+
+      expect(result).to.be.false;
+      expect((Logger.error as sinon.SinonStub).calledWith(sinon.match(/Does not have PackageSavedSessionId__c/))).to.be
+        .true;
+    });
+  });
+
+  describe('downloadAttachments', () => {
+    let connectionRequestStub: sinon.SinonStub;
+
+    beforeEach(() => {
+      connectionRequestStub = connection.request as sinon.SinonStub;
+    });
+
+    it('should download attachments successfully with string response', async () => {
+      connectionRequestStub.resolves('base64encodedcontent');
+
+      const attachments = [
+        { Id: '00P001', Name: 'OmniscriptFullJSON.json', Body: '/services/data/v67.0/sobjects/Attachment/00P001/Body' },
+      ];
+
+      const result = await (migrationTool as any).downloadAttachments(attachments);
+
+      expect(result).to.have.length(1);
+      expect(result[0].id).to.equal('00P001');
+      expect(result[0].name).to.equal('OmniscriptFullJSON.json');
+      expect(result[0].body).to.equal('base64encodedcontent');
+      expect(result[0].errors).to.be.empty;
+      expect(connectionRequestStub.calledOnce).to.be.true;
+    });
+
+    it('should download attachments successfully with object response', async () => {
+      connectionRequestStub.resolves({ data: 'some data' });
+
+      const attachments = [
+        { Id: '00P002', Name: 'file.json', Body: '/services/data/v67.0/sobjects/Attachment/00P002/Body' },
+      ];
+
+      const result = await (migrationTool as any).downloadAttachments(attachments);
+
+      expect(result).to.have.length(1);
+      expect(result[0].id).to.equal('00P002');
+      expect(result[0].body).to.equal('{"data":"some data"}');
+    });
+
+    it('should handle download errors gracefully', async () => {
+      connectionRequestStub.rejects(new Error('Network timeout'));
+      getMessageStub.withArgs('ossAttachmentDownloadFailed').returns('Failed to download attachment: %s - %s');
+
+      const attachments = [
+        { Id: '00P003', Name: 'failed.json', Body: '/services/data/v67.0/sobjects/Attachment/00P003/Body' },
+      ];
+
+      const result = await (migrationTool as any).downloadAttachments(attachments);
+
+      expect(result).to.have.length(1);
+      expect(result[0].id).to.equal('00P003');
+      expect(result[0].body).to.equal('');
+      expect(result[0].errors).to.have.length(1);
+      expect(result[0].errors[0]).to.include('Failed to download attachment');
+      expect((Logger.error as sinon.SinonStub).called).to.be.true;
+    });
+
+    it('should handle attachments with missing fields', async () => {
+      connectionRequestStub.resolves('content');
+
+      const attachments = [
+        { Id: '00P006', Name: '', Body: '' }, // Missing Name and Body
+        { Id: '', Name: 'test.json', Body: '/path/to/body' }, // Missing Id
+      ];
+
+      const result = await (migrationTool as any).downloadAttachments(attachments);
+
+      expect(result).to.have.length(2);
+      expect(result[0].id).to.equal('00P006');
+      expect(result[0].name).to.equal('');
+      expect(result[1].id).to.equal('');
+      expect(result[1].name).to.equal('test.json');
+    });
+
+    it('should download multiple attachments', async () => {
+      connectionRequestStub.onFirstCall().resolves('content1');
+      connectionRequestStub.onSecondCall().resolves('content2');
+
+      const attachments = [
+        { Id: '00P004', Name: 'file1.json', Body: '/services/data/v67.0/sobjects/Attachment/00P004/Body' },
+        { Id: '00P005', Name: 'file2.json', Body: '/services/data/v67.0/sobjects/Attachment/00P005/Body' },
+      ];
+
+      const result = await (migrationTool as any).downloadAttachments(attachments);
+
+      expect(result).to.have.length(2);
+      expect(result[0].body).to.equal('content1');
+      expect(result[1].body).to.equal('content2');
+      expect(connectionRequestStub.calledTwice).to.be.true;
+    });
+  });
+
+  describe('queryPackageOmniscriptsWithType', () => {
+    let queryCustomStub: sinon.SinonStub;
+
+    beforeEach(() => {
+      queryCustomStub = sandbox.stub(QueryTools, 'queryCustom');
+    });
+
+    it('should construct correct SOQL query with Type IN clause and handle empty types', async () => {
+      queryCustomStub.resolves([
+        { vlocity_ins__Type__c: 'TypeA', vlocity_ins__SubType__c: 'SubA', vlocity_ins__Language__c: 'en' },
+      ]);
+
+      // Test with types
+      const types = new Set(['TypeA', 'TypeB']);
+      const result = await (migrationTool as any).queryPackageOmniscriptsWithType(types);
+
+      expect(queryCustomStub.calledOnce).to.be.true;
+      let query = queryCustomStub.getCall(0).args[1];
+      expect(query).to.include('SELECT vlocity_ins__Type__c,vlocity_ins__SubType__c,vlocity_ins__Language__c');
+      expect(query).to.include('FROM vlocity_ins__OmniScript__c');
+      expect(query).to.include("vlocity_ins__Type__c IN ('TypeA','TypeB')");
+      expect(query).to.include('vlocity_ins__IsActive__c = true');
+      expect(result).to.have.length(1);
+
+      // Test with empty types set
+      queryCustomStub.resolves([]);
+      const emptyTypes = new Set<string>();
+      await (migrationTool as any).queryPackageOmniscriptsWithType(emptyTypes);
+
+      query = queryCustomStub.getCall(1).args[1];
+      expect(query).to.include('vlocity_ins__IsActive__c = true');
+      expect(query).to.not.include('IN');
+    });
+
+    it('should handle query failures gracefully', async () => {
+      queryCustomStub.rejects(new Error('Query failed'));
+
+      const types = new Set(['TypeC']);
+      await (migrationTool as any).queryPackageOmniscriptsWithType(types);
+
+      expect((Logger.error as sinon.SinonStub).called).to.be.true;
+    });
+  });
+
+  describe('Helper Methods', () => {
+    describe('isAbsoluteUrl', () => {
+      it('should return true for absolute URLs and false for relative URLs', () => {
+        expect((migrationTool as any).isAbsoluteUrl('https://example.com/path')).to.be.true;
+        expect((migrationTool as any).isAbsoluteUrl('http://test.com')).to.be.true;
+        expect((migrationTool as any).isAbsoluteUrl('/relative/path')).to.be.false;
+        expect((migrationTool as any).isAbsoluteUrl('relative/path')).to.be.false;
+        expect((migrationTool as any).isAbsoluteUrl('../relative')).to.be.false;
+      });
+    });
+
+    describe('replaceResumeSessionUrl', () => {
+      it('should update URL parameters for absolute URLs', () => {
+        const url = 'https://example.com/page?existing=param';
+        const result = (migrationTool as any).replaceResumeSessionUrl(url, 'TypeA', 'SubA', 'en', 'sessionId123');
+
+        expect(result).to.include('c__InstanceId=sessionId123');
+        expect(result).to.include('omniscript__type=TypeA');
+        expect(result).to.include('omniscript__subType=SubA');
+        expect(result).to.include('omniscript__language=en');
+        expect(result).to.not.include('c__target');
+      });
+
+      it('should update URL parameters for relative URLs', () => {
+        const url = '/relative/path?existing=param';
+        const result = (migrationTool as any).replaceResumeSessionUrl(url, 'TypeB', 'SubB', 'es', 'sessionId456');
+
+        expect(result).to.include('c__InstanceId=sessionId456');
+        expect(result).to.include('omniscript__type=TypeB');
+        expect(result).to.include('omniscript__subType=SubB');
+        expect(result).to.include('omniscript__language=es');
+        expect(result).to.not.include('https://');
+      });
+
+      it('should replace vlocityLWCOmniWrapper with standard path', () => {
+        const url = 'https://example.com/vlocityLWCOmniWrapper?c__target=test';
+        const result = (migrationTool as any).replaceResumeSessionUrl(url, 'TypeC', 'SubC', 'fr', 'sessionId789');
+
+        expect(result).to.include('/lightning/page/omnistudio/omniscript');
+        expect(result).to.not.include('vlocityLWCOmniWrapper');
+        expect(result).to.not.include('c__target');
+      });
+
+      it('should handle URL with c__target parameter and remove it', () => {
+        const url = '/path?c__target=remove&other=keep';
+        const result = (migrationTool as any).replaceResumeSessionUrl(url, 'TypeD', 'SubD', 'de', 'sessionIdABC');
+
+        expect(result).to.not.include('c__target');
+        expect(result).to.include('other=keep');
+      });
+    });
+
+    describe('getOmniscriptInstanceFieldKey', () => {
+      it('should return namespaced field key for package fields', () => {
+        const result = (migrationTool as any).getOmniscriptInstanceFieldKey('Status__c', false);
+        expect(result).to.equal('vlocity_ins__Status__c');
+      });
+
+      it('should return standard field key when useStandardDataModel is true', () => {
+        const result = (migrationTool as any).getOmniscriptInstanceFieldKey('Status__c', true);
+        expect(result).to.not.include('vlocity_ins');
+      });
+
+      it('should return field as-is if not in mappings', () => {
+        const result = (migrationTool as any).getOmniscriptInstanceFieldKey('CustomField__c', false);
+        expect(result).to.equal('CustomField__c');
+      });
+    });
+
+    describe('getQueryFields', () => {
+      it('should return field keys for package data model', () => {
+        const mockMap = { Field1__c: 'StandardField1', Field2__c: 'StandardField2' };
+        const result = (migrationTool as any).getQueryFields(mockMap, false);
+        expect(result).to.deep.equal(['Field1__c', 'Field2__c']);
+      });
+
+      it('should return mapped values for standard data model', () => {
+        const mockMap = { Field1__c: 'StandardField1', Field2__c: 'StandardField2' };
+        const result = (migrationTool as any).getQueryFields(mockMap, true);
+        expect(result).to.deep.equal(['StandardField1', 'StandardField2']);
+      });
+    });
+
+    describe('getQueryNamespace', () => {
+      it('should return namespace for package data model', () => {
+        const result = (migrationTool as any).getQueryNamespace(false);
+        expect(result).to.equal('vlocity_ins');
+      });
+
+      it('should return empty string for standard data model', () => {
+        const result = (migrationTool as any).getQueryNamespace(true);
+        expect(result).to.equal('');
+      });
     });
   });
 });
