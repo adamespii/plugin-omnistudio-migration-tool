@@ -248,5 +248,6 @@
   "unableToFindActiveOmniscript": "Unable to find active Omniscript \"%s\".",
   "noOmniscriptFoundForOsInstance": "No Omniscript found for OmniscriptInstance \"%s\"",
   "omniscriptNeedsToBeMigrated": "Omniscript \"%s\" needs to be migrated.",
-  "errorDuringSaveForLaterAssessment": "We've encountered errors during the Save For Later assessment: %s"
+  "errorDuringSaveForLaterAssessment": "We've encountered errors during the Save For Later assessment: %s",
+  "prePostHookAutoEnabled": "PreHook/PostHook will be auto-enabled on Remote Action step(s): %s. A hook implementation is registered for the remote class used by these steps."
 }
