@@ -42,6 +42,7 @@ const titles = {
   reservedKeysFoundInPropertySet: 'Omnistudio Naming Conventions',
   manualDeploymentSteps: 'Set Up Your Environment to Customize Omniscript Elements',
   customLabelMigrationErrorMessage: 'Omnistudio Migration Prerequisites',
+  customLwcReservedActionKey: 'Omnistudio Naming Conventions',
 };
 
 describe('DocumentRegistry', () => {
@@ -128,6 +129,7 @@ describe('DocumentRegistry', () => {
         'reservedKeysFoundInPropertySet',
         'manualDeploymentSteps',
         'customLabelMigrationErrorMessage',
+        'customLwcReservedActionKey',
       ];
 
       expectedKeys.forEach((key) => {
