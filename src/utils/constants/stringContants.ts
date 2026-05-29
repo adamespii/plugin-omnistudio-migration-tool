@@ -73,6 +73,8 @@ export const Constants = {
   // artifacts persistance folder names
   AssessmentReportsFolderName: 'assessment_reports',
   MigrationReportsFolderName: 'migration_report',
+  CustomLabelAssessmentCsvFileName: 'customlabel_assessment_export.csv',
+  CustomLabelMigrationCsvFileName: 'customlabel_migration_export.csv',
 
   // custom label migration status constants
   CustomLabelInvalidStatuses: ['error', 'duplicate'],
