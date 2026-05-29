@@ -2129,6 +2129,9 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
       case Constants.RemoteAction:
         this.processRemoteAction(propSet);
         break;
+      case Constants.NavigateAction:
+        this.processNavigateAction(propSet);
+        break;
       default:
         // Handle other element types if needed
         break;
@@ -2362,6 +2365,65 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
       );
       propSetMap['Type'] = this.cleanName(osType);
       propSetMap['Sub Type'] = this.cleanName(osSubType);
+    }
+  }
+
+  /**
+   * Processes Navigate Action elements so the migrated parent OmniScript can launch its child
+   * under the standard runtime. The standard-runtime Navigate Action LWC reads
+   * `omniscript__type`, `omniscript__subType`, `omniscript__language` from the propertySet to
+   * resolve the child OmniScript (it does not consume `targetLWC`). Params on the URL bound for
+   * the OmniScript page must use the `omniscript__` prefix instead of the managed-package `c__`
+   * prefix.
+   * @param propSetMap Property set map from the element
+   */
+  private processNavigateAction(propSetMap: any): void {
+    if (propSetMap.targetType !== 'Vlocity OmniScript') {
+      return;
+    }
+
+    const lwcRef: string = typeof propSetMap.targetLWC === 'string' ? propSetMap.targetLWC : '';
+    if (lwcRef) {
+      // propertySet stores the LWC tag form ("c:foo" or "c__foo"); the ES-module form ("c/foo")
+      // never appears here, so stripping a leading "<ns>:" or "c__" covers all valid inputs.
+      const stripped = lwcRef
+        .replace(/^[^:]+:/, '')
+        .replace(/^c__/, '')
+        .toLowerCase();
+      const candidates = this.nameRegistry.getOmniScriptMappingKeys().filter((key) => {
+        const parts = key.split('_');
+        if (parts.length < 2) return false;
+        const type = parts[0];
+        const subType = parts[1];
+        const language = parts[2] || 'English';
+        const candidate = `${this.cleanName(type)}${this.cleanName(subType)}${language}`.toLowerCase();
+        return candidate === stripped;
+      });
+
+      if (candidates.length > 1) {
+        Logger.logVerbose(
+          `\nMultiple OmniScript registry keys collapse to the same LWC name '${lwcRef}': ${candidates.join(
+            ', '
+          )}. Using the first match.`
+        );
+      }
+
+      const match = candidates[0];
+      if (match) {
+        const cleanedFullName = this.nameRegistry.getCleanedName(match, 'OmniScript');
+        const cleanedParts = cleanedFullName.split('_');
+        if (cleanedParts.length >= 2) {
+          propSetMap.omniscript__type = cleanedParts[0];
+          propSetMap.omniscript__subType = cleanedParts[1];
+          propSetMap.omniscript__language = cleanedParts[2] || match.split('_')[2] || 'English';
+        }
+      } else {
+        Logger.logVerbose(`\n${this.messages.getMessage('componentMappingNotFound', ['OmniScript', lwcRef])}`);
+      }
+    }
+
+    if (typeof propSetMap.targetLWCParams === 'string' && propSetMap.targetLWCParams) {
+      propSetMap.targetLWCParams = propSetMap.targetLWCParams.replace(/(^|&)c__/g, '$1omniscript__');
     }
   }
 
