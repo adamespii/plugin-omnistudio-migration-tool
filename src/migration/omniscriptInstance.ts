@@ -3,14 +3,22 @@ import { Connection, Messages } from '@salesforce/core';
 import { Ux } from '@salesforce/sf-plugins-core';
 
 import OmniScriptInstanceMappings from '../mappings/OmniScriptInstance';
+import OmniScriptMappings from '../mappings/OmniScript';
 import { QueryTools } from '../utils';
 import { Logger } from '../utils/logger';
+import { NetUtils } from '../utils/net';
 import { isStandardDataModel, isStandardDataModelWithMetadataAPIEnabled } from '../utils/dataModelService';
 import { SaveForLaterAssessmentInfo } from '../utils/interfaces';
 import { Constants } from '../utils/constants/stringContants';
 import { OmniscriptNameMapping, OSAssessmentInfo } from '../../src/utils';
 import { BaseMigrationTool, ComponentType } from './base';
-import { InvalidEntityTypeError, MigrationResult, MigrationTool, ObjectMapping } from './interfaces';
+import {
+  InvalidEntityTypeError,
+  MigrationResult,
+  MigrationTool,
+  ObjectMapping,
+  UploadRecordResult,
+} from './interfaces';
 import { createProgressBar } from './base';
 
 export class OmniScriptInstanceMigrationTool extends BaseMigrationTool implements MigrationTool {
@@ -78,7 +86,7 @@ export class OmniScriptInstanceMigrationTool extends BaseMigrationTool implement
         return [];
       }
 
-      const { omniProcessesSet, omniscriptSet } = await this.assessPrepare(omniscriptInstances, omniAssessmentInfos);
+      const { omniProcessMap, omniscriptSet } = await this.assessPrepare(omniscriptInstances, omniAssessmentInfos);
 
       const progressBar = createProgressBar('Assessing', this.getName() as ComponentType);
       progressBar.start(omniscriptInstances.length, 0);
@@ -90,7 +98,7 @@ export class OmniScriptInstanceMigrationTool extends BaseMigrationTool implement
       for (const osInstance of omniscriptInstances) {
         const assessInfo: SaveForLaterAssessmentInfo = this.performAssessment(
           osInstance,
-          omniProcessesSet,
+          omniProcessMap,
           omniscriptSet
         );
         assessmentInfos.push(assessInfo);
@@ -117,21 +125,65 @@ export class OmniScriptInstanceMigrationTool extends BaseMigrationTool implement
   }
 
   /**
-   * Migration of Save for Later instances (Story 3)
-   * TODO: Implement in Story 3
+   * Migration of Save for Later instances
    */
   public async migrate(): Promise<MigrationResult[]> {
-    const queryAttachments = await this.queryAttachments(new Set());
-    if (queryAttachments) {
-      Logger.log('temporary placeholder');
+    if (isStandardDataModelWithMetadataAPIEnabled()) {
+      return [];
     }
-    return Promise.resolve([
+
+    const originalOsInstanceRecords = new Map<string, unknown>();
+    const osInstanceUploadInfo = new Map<string, UploadRecordResult>();
+
+    try {
+      // verify custom field PackageSavedSessionId__c exists in OmniScriptSavedSession
+      const hasCustomField = await this.hasCustomFieldPackageSavedSessionId();
+      if (!hasCustomField) {
+        Logger.error(this.messages.getMessage('ossMissingCustomField'));
+        return [];
+      }
+
+      const omniscriptInstances = await this.queryOmniscriptInstance();
+      Logger.log(
+        this.messages.getMessage('foundOmniScriptsToMigrate', [
+          omniscriptInstances.length,
+          Constants.OmniScriptSavedSessionsDisplayName,
+        ])
+      );
+
+      if (omniscriptInstances.length === 0) {
+        return [];
+      }
+
+      const { omniProcessMap } = await this.assessPrepare(omniscriptInstances);
+
+      const progressBar = createProgressBar('Migrating', this.getName() as ComponentType);
+      progressBar.start(omniscriptInstances.length, 0);
+
+      let progressCounter = 0;
+
+      // Process and set the migration status for both saved sessions and omniscripts
+      for (const osInstance of omniscriptInstances) {
+        const migratedInfo: UploadRecordResult = await this.performMigration(osInstance, omniProcessMap);
+        const osInstanceId = String(osInstance['Id'] ?? '');
+        osInstanceUploadInfo.set(osInstanceId, migratedInfo);
+        originalOsInstanceRecords.set(osInstanceId, osInstance);
+
+        progressBar.update(++progressCounter);
+      }
+
+      progressBar.stop();
+    } catch (error) {
+      Logger.error(this.messages.getMessage('ossMigrationFailed'), error);
+    }
+
+    return [
       {
         name: this.getName(),
-        results: new Map(),
-        records: new Map(),
+        results: osInstanceUploadInfo,
+        records: originalOsInstanceRecords,
       },
-    ]);
+    ];
   }
 
   private async assessPrepare(
@@ -139,7 +191,7 @@ export class OmniScriptInstanceMigrationTool extends BaseMigrationTool implement
     omniAssessmentInfos?: {
       osAssessmentInfos: OSAssessmentInfo[];
     }
-  ): Promise<{ omniProcessesSet: Set<string>; omniscriptSet: Set<string> }> {
+  ): Promise<{ omniProcessMap: Map<string, string>; omniscriptSet: Set<string> }> {
     let omniscriptSet: Set<string> = new Set();
     if (omniAssessmentInfos && omniAssessmentInfos.osAssessmentInfos) {
       omniscriptSet = this.extractUniqueNamesFromOmniscriptAssessment(omniAssessmentInfos.osAssessmentInfos);
@@ -151,9 +203,25 @@ export class OmniScriptInstanceMigrationTool extends BaseMigrationTool implement
     // NOTE : if OmniscriptType__c is null for an omniscriptInstance,
     // it means that the original omniscript has been deleted AND this specific instance might be unrepairable
     for (const osInst of omniscriptInstances) {
-      const osType = String(osInst[this.getPackageFieldKey('OmniScriptType__c')] ?? '');
+      const osType = String(osInst[this.getOmniscriptInstancePackageFieldKey('OmniScriptType__c')] ?? '');
       if (osInst && osType !== '') {
         omniscriptTypes.add(osType);
+      }
+    }
+
+    // query for Omniscript__c if omniscriptAssessment did not provide any information
+    if (omniscriptSet.size === 0) {
+      const packageOmniscripts: AnyJson = await this.queryPackageOmniscriptsWithType(omniscriptTypes);
+      const osType = this.getOmniscriptPackageFieldKey('Type__c');
+      const osSubType = this.getOmniscriptPackageFieldKey('SubType__c');
+      const osLanguage = this.getOmniscriptPackageFieldKey('Language__c');
+      omniscriptSet = new Set<string>();
+      for (const pkgos of packageOmniscripts) {
+        const uniqueOmniProcessString =
+          String(pkgos[osType] ?? '') + String(pkgos[osSubType] ?? '') + String(pkgos[osLanguage] ?? '');
+        if (uniqueOmniProcessString !== '') {
+          omniscriptSet.add(uniqueOmniProcessString);
+        }
       }
     }
 
@@ -162,17 +230,20 @@ export class OmniScriptInstanceMigrationTool extends BaseMigrationTool implement
 
     // extract the unique string for each omni process, store it in a set, it will be used
     // later to determine the omniscript migration status
-    const omniProcessesSet = omniProcesses.reduce((newSet: Set<string>, op: AnyJson) => {
-      const uniqueOmniProcessString =
-        String(op['Type'] ?? '') + String(op['SubType'] ?? '') + String(op['Language'] ?? '');
-      if (uniqueOmniProcessString !== '') {
-        newSet.add(uniqueOmniProcessString);
+    const omniProcessMap: Map<string, string> = new Map<string, string>();
+    for (const omniProcess of omniProcesses) {
+      const uniqueOmniProcessString: string =
+        String(omniProcess['Type'] ?? '') +
+        String(omniProcess['SubType'] ?? '') +
+        String(omniProcess['Language'] ?? '');
+      const recordId = String(omniProcess['Id']);
+      if (uniqueOmniProcessString !== '' && recordId !== '') {
+        omniProcessMap.set(uniqueOmniProcessString, recordId);
       }
-      return newSet;
-    }, new Set());
+    }
 
     return {
-      omniProcessesSet,
+      omniProcessMap,
       omniscriptSet,
     };
   }
@@ -206,18 +277,18 @@ export class OmniScriptInstanceMigrationTool extends BaseMigrationTool implement
 
   private performAssessment(
     osInstance: AnyJson,
-    omniProcessSet: Set<string>,
+    omniProcessMap: Map<string, string>,
     omniscriptSet: Set<string>
   ): SaveForLaterAssessmentInfo {
-    const osId = String(osInstance[this.getPackageFieldKey('OmniScriptId__c')] ?? '');
-    const osType = String(osInstance[this.getPackageFieldKey('OmniScriptType__c')] ?? '');
-    const osSubType = String(osInstance[this.getPackageFieldKey('OmniScriptSubType__c')] ?? '');
-    const osLanguage = String(osInstance[this.getPackageFieldKey('OmniScriptLanguage__c')] ?? '');
+    const osId = String(osInstance[this.getOmniscriptInstancePackageFieldKey('OmniScriptId__c')] ?? '');
+    const osType = String(osInstance[this.getOmniscriptInstancePackageFieldKey('OmniScriptType__c')] ?? '');
+    const osSubType = String(osInstance[this.getOmniscriptInstancePackageFieldKey('OmniScriptSubType__c')] ?? '');
+    const osLanguage = String(osInstance[this.getOmniscriptInstancePackageFieldKey('OmniScriptLanguage__c')] ?? '');
 
     const osInstanceId = String(osInstance['Id'] ?? '');
     const osInstanceName = String(osInstance['Name'] ?? '');
-    const osInstanceStatus = String(osInstance[this.getPackageFieldKey('Status__c')] ?? '');
-    const osInstanceLastSaved = String(osInstance[this.getPackageFieldKey('LastSaved__c')] ?? '');
+    const osInstanceStatus = String(osInstance[this.getOmniscriptInstancePackageFieldKey('Status__c')] ?? '');
+    const osInstanceLastSaved = String(osInstance[this.getOmniscriptInstancePackageFieldKey('LastSaved__c')] ?? '');
 
     const uniqueOmniProcessString = osType + osSubType + osLanguage;
 
@@ -230,7 +301,7 @@ export class OmniScriptInstanceMigrationTool extends BaseMigrationTool implement
 
     // if omniscriptInstance's referenced omniscript is not migrated to core
     // then check the passed in omniscripts assessments from managed package
-    if (omniProcessSet.has(uniqueOmniProcessString)) {
+    if (omniProcessMap.has(uniqueOmniProcessString)) {
       // active Omni Process is in the org (already migrated)
       migrationStatus = 'Ready for migration';
       omniScriptMigrationStatus = 'Complete';
@@ -282,12 +353,351 @@ export class OmniScriptInstanceMigrationTool extends BaseMigrationTool implement
     return assessInfo;
   }
 
+  private async performMigration(
+    osInstance: AnyJson,
+    omniProcessMap: Map<string, string>
+  ): Promise<UploadRecordResult> {
+    const errors: string[] = [];
+    const warnings: string[] = [];
+    let skipped = false;
+
+    // Extract OmniScript Instance data
+    const osInstanceId = String(osInstance['Id'] ?? '');
+    const osInstanceName = String(osInstance['Name'] ?? '');
+    const osTypeFieldKey: string = this.getOmniscriptInstancePackageFieldKey('OmniScriptType__c');
+    const osSubTypeFieldKey: string = this.getOmniscriptInstancePackageFieldKey('OmniScriptSubType__c');
+    const osLanguageFieldKey: string = this.getOmniscriptInstancePackageFieldKey('OmniScriptLanguage__c');
+
+    const osType = String(osInstance[osTypeFieldKey] ?? '');
+    const osSubType = String(osInstance[osSubTypeFieldKey] ?? '');
+    const osLanguage = String(osInstance[osLanguageFieldKey] ?? '');
+
+    if (osType === '' || osSubType === '' || osLanguage === '') {
+      errors.push(
+        this.messages.getMessage('ossMissingFieldValue', [
+          osInstanceName,
+          osTypeFieldKey,
+          osSubTypeFieldKey,
+          osLanguageFieldKey,
+        ])
+      );
+      skipped = true;
+      const uploadedRecord: UploadRecordResult = {
+        referenceId: osInstanceId,
+        id: '',
+        success: errors.length === 0,
+        hasErrors: errors.length > 0,
+        errors,
+        warnings,
+        newName: osInstanceName,
+        skipped,
+      };
+
+      return uploadedRecord;
+    }
+
+    // Extract OmniProcess Id from omniProcessSet
+    const uniqueOmniProcessString = osType + osSubType + osLanguage;
+    const targetOmniProcessId = omniProcessMap.get(uniqueOmniProcessString);
+
+    if (!targetOmniProcessId) {
+      errors.push(this.messages.getMessage('ossOmniscriptNeedsMigration', [osType, osSubType, osLanguage]));
+      skipped = true;
+      const uploadedRecord: UploadRecordResult = {
+        referenceId: osInstanceId,
+        id: '',
+        success: errors.length === 0,
+        hasErrors: errors.length > 0,
+        errors,
+        warnings,
+        newName: osInstanceName,
+        skipped,
+      };
+
+      return uploadedRecord;
+    }
+
+    Logger.debug(this.messages.getMessage('ossFoundOmniProcess', [osType, osSubType, osLanguage, targetOmniProcessId]));
+
+    // Construct data for OmniScriptSavedSession
+    const savedSessionData: AnyJson = {};
+
+    // Map fields from OmniScriptInstance__c to OmniScriptSavedSession
+    for (const [packageField, coreField] of Object.entries(OmniScriptInstanceMappings)) {
+      const packageFieldKey = this.getOmniscriptInstancePackageFieldKey(packageField);
+      const sourceValue = String(osInstance[packageFieldKey] ?? '');
+
+      if (sourceValue !== '') {
+        savedSessionData[coreField] = sourceValue;
+      }
+    }
+
+    delete savedSessionData['IsWebCompEnabled'];
+    delete savedSessionData['OmniScriptVersionNumber'];
+    delete savedSessionData['OmniScriptType'];
+    delete savedSessionData['OmniScriptSubType'];
+    delete savedSessionData['OmniScriptLanguage'];
+    savedSessionData['Name'] = osInstanceName;
+    savedSessionData['OmniScriptId'] = targetOmniProcessId;
+    savedSessionData['PackageSavedSessionId__c'] = osInstanceId;
+
+    // Upload to OmniScriptSavedSession
+    const omniscriptSavedSessionResult: CreateOmniscriptSavedSessionResult =
+      await this.migrateCreateOmniscriptSavedSession(
+        osInstanceId,
+        osInstanceName,
+        osType,
+        osSubType,
+        osLanguage,
+        savedSessionData
+      );
+    if (omniscriptSavedSessionResult?.errors?.length > 0) {
+      errors.push(...omniscriptSavedSessionResult.errors);
+    }
+
+    // Extract Id for OmniScriptSavedSession
+    const newSavedSessionId = omniscriptSavedSessionResult?.id;
+    if (!newSavedSessionId) {
+      const errMsg = this.messages.getMessage('ossSkipAttachmentUpload', [osInstanceName]);
+      Logger.error(errMsg);
+      errors.push(errMsg);
+    } else {
+      // Extract all attachment object information for current omniscriptInstance record
+      // includes the url to the content of the attachment Body
+      const attachments: AnyJson[] = await this.queryAttachments(osInstanceId);
+      Logger.log(this.messages.getMessage('ossFoundAttachments', [attachments.length, osInstanceId]));
+      // Download attachment body
+      const attachmentBodyData: AttachmentDownloadResult[] = await this.downloadAttachments(attachments);
+
+      // Transform / replace references to managed package in attachments Body  : OmniscriptFullJSON.json
+
+      // Upload Attachment with Saved Session's Id as ParentId
+      const uploadAttachmentResult: MigrateUploadAttachmentsResult = await this.migrateUploadAttachments(
+        attachmentBodyData,
+        newSavedSessionId,
+        osInstanceName
+      );
+      if (uploadAttachmentResult?.errors?.length > 0) {
+        errors.concat(uploadAttachmentResult.errors);
+      }
+    }
+
+    const uploadedRecord: UploadRecordResult = {
+      referenceId: osInstanceId,
+      id: newSavedSessionId,
+      success: errors.length === 0,
+      hasErrors: errors.length > 0,
+      errors,
+      warnings,
+      newName: osInstanceName,
+      skipped,
+    };
+
+    return uploadedRecord;
+  }
+
+  private async migrateCreateOmniscriptSavedSession(
+    osInstanceId: string,
+    osInstanceName: string,
+    osType: string,
+    osSubType: string,
+    osLanguage: string,
+    savedSessionData: AnyJson
+  ): Promise<CreateOmniscriptSavedSessionResult> {
+    const errors: string[] = [];
+    let recordId = '';
+    let uploadResult: UploadRecordResult;
+
+    try {
+      uploadResult = await NetUtils.createOne(
+        this.connection,
+        Constants.OmniScriptSavedSessionObjectName,
+        osInstanceId,
+        savedSessionData
+      );
+
+      if (!uploadResult.success || uploadResult.hasErrors) {
+        const errMsg = this.messages.getMessage('ossCreateOssFailure', [osInstanceName, JSON.stringify(uploadResult)]);
+        Logger.error(errMsg);
+        errors.push(errMsg);
+      }
+
+      recordId = uploadResult.id || '';
+
+      Logger.logVerbose(this.messages.getMessage('ossCreateOssSuccess', [recordId]));
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      const msg = this.messages.getMessage('ossCreateOssError', [osInstanceName, errorMsg]);
+      Logger.error(msg);
+      errors.push(msg);
+    }
+
+    if (savedSessionData && recordId !== '') {
+      // update the Session Id's Resume Urls with its own record Id
+      // replace the URLS
+      savedSessionData['ResumeUrl'] = this.replaceResumeSessionUrl(
+        String(savedSessionData['ResumeUrl'] ?? ''),
+        osType,
+        osSubType,
+        osLanguage,
+        recordId
+      );
+      savedSessionData['RelativeResumeUrl'] = this.replaceResumeSessionUrl(
+        String(savedSessionData['RelativeResumeUrl'] ?? ''),
+        osType,
+        osSubType,
+        osLanguage,
+        recordId
+      );
+
+      // resume urls have been updated, show as debugging log
+      Logger.debug(this.messages.getMessage('ossSessionDataShape', [JSON.stringify(savedSessionData)]));
+
+      try {
+        uploadResult = await NetUtils.updateOne(
+          this.connection,
+          Constants.OmniScriptSavedSessionObjectName,
+          osInstanceId,
+          recordId,
+          savedSessionData
+        );
+
+        if (!uploadResult.success || uploadResult.hasErrors) {
+          const errMsg = this.messages.getMessage('ossUpdateOssFailure', [
+            osInstanceName,
+            JSON.stringify(uploadResult),
+          ]);
+          Logger.error(errMsg);
+          errors.push(errMsg);
+        }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        const msg = this.messages.getMessage('ossUpdateOssError', [osInstanceName, errorMsg]);
+        Logger.error(msg);
+        errors.push(msg);
+      }
+    }
+
+    return {
+      id: recordId,
+      createOmniscriptSavedSessionSuccess: errors.length === 0,
+      errors,
+    };
+  }
+
+  private async migrateUploadAttachments(
+    attachments: AttachmentDownloadResult[],
+    savedSessionId: string,
+    osInstanceName: string
+  ): Promise<MigrateUploadAttachmentsResult> {
+    let attachmentsUploaded = 0;
+    const errors: string[] = [];
+
+    if (attachments.length > 0) {
+      Logger.logVerbose(this.messages.getMessage('ossAttachmentUploadStart', [attachments.length, osInstanceName]));
+
+      for (const attachment of attachments) {
+        const attachmentName = String(attachment['name'] ?? '');
+        const attachmentData: AnyJson = {
+          ParentId: savedSessionId,
+          Name: attachmentName,
+          Body: String(attachment['body'] ?? ''),
+        };
+
+        const attachmentId = String(attachment['id'] ?? '');
+
+        try {
+          const attachResult = await NetUtils.createOne(
+            this.connection,
+            Constants.AttachmentObjectName,
+            attachmentId,
+            attachmentData
+          );
+
+          if (!attachResult.success || attachResult.hasErrors) {
+            const errorMsg = this.messages.getMessage('ossAttachmentUploadFailed', [
+              attachmentName,
+              JSON.stringify(attachResult.errors),
+            ]);
+            Logger.warn(errorMsg);
+            errors.push(errorMsg);
+          } else {
+            attachmentsUploaded++;
+            Logger.logVerbose(this.messages.getMessage('ossAttachmentUploadSuccess', [attachmentName]));
+          }
+        } catch (error) {
+          const errMsg = error instanceof Error ? error.message : String(error);
+          const errorMsg = this.messages.getMessage('ossAttachmentUploadError', [attachmentName, errMsg]);
+          Logger.warn(errorMsg);
+          errors.push(errorMsg);
+        }
+      }
+      Logger.logVerbose(
+        this.messages.getMessage('ossAttachmentUploadEnd', [attachmentsUploaded, attachments.length, osInstanceName])
+      );
+    }
+
+    return {
+      attachmentUploadSuccess: attachmentsUploaded === 3,
+      errors,
+    };
+  }
+
+  private replaceResumeSessionUrl(
+    url: string,
+    osType: string,
+    osSubType: string,
+    osLanguage: string,
+    osInstanceId: string
+  ): string {
+    let updatedUrl: string = url;
+
+    // not a real url
+    const urlHostTemp = 'https://migrationtool.omnistudio.salesforce.com';
+    let urlObj: URL;
+
+    if (this.isAbsoluteUrl(updatedUrl)) {
+      urlObj = new URL(updatedUrl);
+    } else {
+      // relative url requires a temporary host
+      urlObj = new URL(updatedUrl, urlHostTemp);
+    }
+
+    urlObj.searchParams.set('c__InstanceId', osInstanceId);
+    urlObj.searchParams.set('omniscript__type', osType);
+    urlObj.searchParams.set('omniscript__subType', osSubType);
+    urlObj.searchParams.set('omniscript__language', osLanguage);
+    urlObj.searchParams.delete('c__target');
+
+    // replace aura wrapper
+    if (urlObj.pathname.indexOf('vlocityLWCOmniWrapper') > -1) {
+      urlObj.pathname = '/lightning/page/omnistudio/omniscript';
+    }
+
+    if (urlObj.origin === urlHostTemp) {
+      updatedUrl = urlObj.pathname + urlObj.search;
+    } else {
+      updatedUrl = urlObj.toString();
+    }
+
+    return updatedUrl;
+  }
+
+  private isAbsoluteUrl(urlString: string): boolean {
+    try {
+      new URL(urlString);
+      return true; // If no error, it's absolute
+    } catch {
+      return false; // If error, it's relative or invalid
+    }
+  }
+
   /**
    * Query Omni Process (Core) and filter by type using QueryTools pattern
    * Uses mappings to determine which fields to query
    */
   private async queryOmniProcessesWithType(omniProcessTypes: Set<string>): Promise<AnyJson[]> {
-    const fields = ['Name', 'Type', 'SubType', 'Language'];
+    const fields = ['Id', 'Name', 'Type', 'SubType', 'Language'];
     const osTypeList = Array.from(omniProcessTypes);
     const typeInListFilter = `Type IN (${osTypeList.map((s) => `'${s}'`).join(',')})`;
     const filters = ['IsActive = true'];
@@ -315,6 +725,42 @@ export class OmniScriptInstanceMigrationTool extends BaseMigrationTool implement
   }
 
   /**
+   * Query Omniscripts__c (Package) and filter by type using QueryTools pattern
+   * Uses mappings to determine which fields to query
+   */
+  private async queryPackageOmniscriptsWithType(omniscriptTypes: Set<string>): Promise<AnyJson[]> {
+    const osType = String(this.getOmniscriptPackageFieldKey('Type__c') ?? '');
+    const osSubType = String(this.getOmniscriptPackageFieldKey('SubType__c') ?? '');
+    const osLanguage = String(this.getOmniscriptPackageFieldKey('Language__c') ?? '');
+    const osIsActive = String(this.getOmniscriptPackageFieldKey('IsActive__c') ?? '');
+    const fields = [osType, osSubType, osLanguage];
+    const osTypeList = Array.from(omniscriptTypes);
+    const typeInListFilter = `${osType} IN (${osTypeList.map((s) => `'${s}'`).join(',')})`;
+    const filters = [`${osIsActive} = true`];
+    let filterQuery = '';
+    if (osTypeList.length > 0) {
+      filters.push(typeInListFilter);
+      filterQuery = filters.join(' AND ');
+    } else {
+      filterQuery = filters.join('');
+    }
+    /**
+     * SELECT Name, Type, SubType, Language FROM OmniProcess WHERE Type IN ('sfl','test','other') AND IsActive = true
+     */
+    const queryString = `SELECT ${fields.join(',')} 
+                        FROM ${this.namespace}__${Constants.OmniscriptObjectName} 
+                        WHERE ${filterQuery}`;
+
+    try {
+      return await QueryTools.queryCustom(this.connection, queryString);
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      Logger.error(this.messages.getMessage('errorOmniProcessWithTypeQuery'), error);
+      return [];
+    }
+  }
+
+  /**
    * Query OmniscriptInstance__c (Package) using QueryTools pattern
    * Uses mappings to determine which fields to query
    */
@@ -323,7 +769,7 @@ export class OmniScriptInstanceMigrationTool extends BaseMigrationTool implement
 
     const filters = new Map<string, unknown>();
     // Only migrate 'In Progress' sessions
-    filters.set(this.getFieldKey('Status__c'), 'In Progress');
+    filters.set(this.getOmniscriptInstanceFieldKey('Status__c'), 'In Progress');
 
     try {
       return await QueryTools.queryWithFilter(
@@ -350,20 +796,15 @@ export class OmniScriptInstanceMigrationTool extends BaseMigrationTool implement
    * @returns a list of attachment records with parent ids matching the list of parent ids provided
    */
 
-  private async queryAttachments(attachmentParentIds: Set<string>): Promise<AnyJson[]> {
-    const fields = ['Id', 'Name', 'Body'];
-    const parentIdsList = Array.from(attachmentParentIds);
-    const parentIdInListFilter = `ParentId IN (${parentIdsList.map((s) => `'${s}'`).join(',')})`;
-    let filterQuery = ' WHERE ';
-    if (parentIdInListFilter.length > 0) {
-      filterQuery = parentIdInListFilter;
-    }
+  private async queryAttachments(attachmentParentId: string): Promise<AnyJson[]> {
+    const fields = ['Id', 'Name', 'Body', 'ContentType'];
+    const filterStr = `WHERE ParentId = '${attachmentParentId}'`;
     /**
-     * SELECT Id, Name, Body FROM Attachment WHERE ParentId IN ('a3eSB000000DI0jYAG','test','other')
+     * SELECT Id, Name, Body, ContentType FROM Attachment WHERE ParentId = a3eSB000000DI0jYAG)
      */
     const queryString = `SELECT ${fields.join(',')} 
                         FROM ${Constants.AttachmentObjectName} 
-                        ${filterQuery}`;
+                        ${filterStr}`;
 
     try {
       return await QueryTools.queryCustom(this.connection, queryString);
@@ -374,11 +815,79 @@ export class OmniScriptInstanceMigrationTool extends BaseMigrationTool implement
     }
   }
 
+  private async hasCustomFieldPackageSavedSessionId(): Promise<boolean> {
+    const fields = ['Name', 'PackageSavedSessionId__c'];
+    /**
+     * SELECT Name, PackageSavedSessionId__c FROM OmniscriptSavedSession LIMIT 1
+     */
+    const queryString = `SELECT ${fields.join(',')} 
+                        FROM ${Constants.OmniScriptSavedSessionObjectName} 
+                        LIMIT 1`;
+
+    try {
+      await QueryTools.queryCustom(this.connection, queryString);
+      return true;
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      Logger.error('Does not have PackageSavedSessionId__c', error);
+      return false;
+    }
+  }
+
   /**
-   * Get field key with namespace prefix from mappings
+   * Download attachment bodies from Salesforce
+   *
+   * @param connection - Salesforce connection instance
+   * @param attachmentBodyPaths - Array of attachment body URLs (e.g., /services/data/v67.0/sobjects/Attachment/00PSB000003DJG12AO/Body)
+   * @returns Array of downloaded attachment data with bodies and any errors
+   */
+  private async downloadAttachments(attachments: AnyJson[]): Promise<AttachmentDownloadResult[]> {
+    const results: AttachmentDownloadResult[] = [];
+
+    for (const attachment of attachments) {
+      const errors: string[] = [];
+      const attachmentId = String(attachment['Id'] ?? '');
+      const attachmentName = String(attachment['Name'] ?? '');
+      const path = String(attachment['Body'] ?? '');
+      let body = '';
+
+      try {
+        const raw = await this.connection.request<string | Buffer>({
+          method: 'GET',
+          url: path,
+        });
+
+        if (typeof raw === 'object') {
+          body = JSON.stringify(raw);
+        } else if (typeof raw === 'string') {
+          body = raw;
+        }
+
+        Logger.logVerbose(this.messages.getMessage('ossAttachmentDownloadSuccess', [attachmentId, body.length]));
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        const msg = this.messages.getMessage('ossAttachmentDownloadFailed', [path, JSON.stringify(errorMsg)]);
+        Logger.error(msg);
+        errors.push(msg);
+      }
+
+      results.push({
+        id: attachmentId,
+        name: attachmentName,
+        body,
+        originalPath: path,
+        errors,
+      });
+    }
+
+    return results;
+  }
+
+  /**
+   * Get field key with namespace prefix from OmniscriptInstanceMapping
    * Uses mappings object to get the source field name, then adds namespace if needed
    */
-  private getFieldKey(fieldName: string, useStandardDataModel = false): string {
+  private getOmniscriptInstanceFieldKey(fieldName: string, useStandardDataModel = false): string {
     // If fieldName is already a key in mappings, use it directly
     if (Object.prototype.hasOwnProperty.call(OmniScriptInstanceMappings, fieldName)) {
       if (useStandardDataModel) {
@@ -391,8 +900,29 @@ export class OmniScriptInstanceMigrationTool extends BaseMigrationTool implement
     return fieldName;
   }
 
-  private getPackageFieldKey(fieldName: string): string {
-    return this.getFieldKey(fieldName, false);
+  private getOmniscriptInstancePackageFieldKey(fieldName: string): string {
+    return this.getOmniscriptInstanceFieldKey(fieldName, false);
+  }
+
+  /**
+   * Get field key with namespace prefix from OmniscriptMapping
+   * Uses mappings object to get the source field name, then adds namespace if needed
+   */
+  private getOmniscriptFieldKey(fieldName: string, useStandardDataModel = false): string {
+    // If fieldName is already a key in mappings, use it directly
+    if (Object.prototype.hasOwnProperty.call(OmniScriptMappings, fieldName)) {
+      if (useStandardDataModel) {
+        const mappedValue = OmniScriptMappings[fieldName as keyof typeof OmniScriptMappings];
+        return mappedValue;
+      }
+      return `${this.namespace}__${fieldName}`;
+    }
+    // Otherwise, assume it's already the correct field name
+    return fieldName;
+  }
+
+  private getOmniscriptPackageFieldKey(fieldName: string): string {
+    return this.getOmniscriptFieldKey(fieldName, false);
   }
 
   /**
@@ -415,4 +945,23 @@ export class OmniScriptInstanceMigrationTool extends BaseMigrationTool implement
   private getQueryNamespace(useStandardDataModel = false): string {
     return useStandardDataModel ? '' : this.namespace;
   }
+}
+
+interface CreateOmniscriptSavedSessionResult {
+  id: string;
+  createOmniscriptSavedSessionSuccess: boolean;
+  errors: string[];
+}
+
+interface MigrateUploadAttachmentsResult {
+  attachmentUploadSuccess: boolean;
+  errors: string[];
+}
+
+interface AttachmentDownloadResult {
+  id: string;
+  name: string;
+  body: string;
+  originalPath: string;
+  errors: string[];
 }

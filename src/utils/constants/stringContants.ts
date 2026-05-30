@@ -96,6 +96,7 @@ export const Constants = {
   OmniProcessObjectName: 'OmniProcess',
   OmniUiCardObjectName: 'OmniUiCard',
   OmniDataTransformObjectName: 'OmniDataTransform',
+  OmniscriptObjectName: 'OmniScript__c',
   OmniScriptInstanceObjectName: 'OmniScriptInstance__c',
   OmniScriptSavedSessionObjectName: 'OmniScriptSavedSession',
 

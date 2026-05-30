@@ -32,7 +32,7 @@ export const createProgressBar = (action: string, type: ComponentType | RelatedO
   const space = noSpaceTypes.includes(typeStr) ? '' : '\t\t\t\t';
 
   return new cliProgress.SingleBar({
-    format: `${action} ${type} | ${space} {bar} | {percentage}% || {value}/{total} Tasks`,
+    format: `${action} ${type} | ${space} {bar} | {percentage}% || {value}/{total} Tasks\n`,
     barCompleteChar: '\u2588',
     barIncompleteChar: '\u2591',
     hideCursor: true,
