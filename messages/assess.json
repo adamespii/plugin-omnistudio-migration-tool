@@ -246,11 +246,11 @@
   "apexClassNotFound": "Apex class \"%s\" referenced in \"%s\" does not exist in the org",
   "cleanupMetadataTablesRequired": "Omnistudio configuration tables contain records. Back up your Omnistudio component table data, and manually clean up the Omnistudio configuration tables. <a href='https://help.salesforce.com/s/articleView?id=xcloud.os_enable_omnistudio_metadata_api_support.htm&type=5' target='_blank'>Learn more about cleaning up tables in Salesforce Help</a>",
   "corruptedParentChildLevel": "%s has elements with corrupted parent-child hierarchy. The following elements have their parent and child persisted at the same level, which will cause data loss after migration: %s. Create a new version of this %s to fix the issue before migrating.",
-  "errorOmniProcessWithTypeQuery": "Error calling queryOmniProcessesWithType() during Save for Later assessment",
-  "omniscriptDoesNotExistOrActivate": "Please make sure the Omniscript is activated or exists in the Org.",
+  "errorOmniProcessWithTypeQuery": "An error occurred calling queryOmniProcessesWithType() during the Save for Later assessment.",
+  "omniscriptDoesNotExistOrActivate": "The Omniscript doesn't exist in this org or isn't activated. Verify that the Omniscript exists  and is activated in your org.",
   "unableToFindActiveOmniscript": "Unable to find active Omniscript \"%s\".",
   "noOmniscriptFoundForOsInstance": "No Omniscript found for OmniscriptInstance \"%s\"",
   "omniscriptNeedsToBeMigrated": "Omniscript \"%s\" needs to be migrated.",
-  "errorDuringSaveForLaterAssessment": "We've encountered errors during the Save For Later assessment: %s",
+  "errorDuringSaveForLaterAssessment": "Errors occurred during the Save for Later assessment:",
   "prePostHookAutoEnabled": "PreHook/PostHook will be auto-enabled on Remote Action step(s): %s. A hook implementation is registered for the remote class used by these steps."
 }
