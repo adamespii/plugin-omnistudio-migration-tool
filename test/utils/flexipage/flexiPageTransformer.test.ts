@@ -24,8 +24,10 @@ describe('transformFlexipageBundle', () => {
 
   const namespace = 'clocity_ins';
   const lookupComponentName = 'vlocityLWCOmniWrapper';
-  const targetComponentName = 'runtime_omnistudio:omniscript';
-  const targetIdentifier = 'runtime_omnistudio_omniscript';
+
+  // Lightning wrappers (introduced in 260) - target component names
+  const lightningTargetComponentNameOS = 'lightning:omnistudioOmniscript';
+  const lightningTargetComponentNameFC = 'lightning:omnistudioFlexcard';
 
   function makeComponentInstance(props: FlexiComponentInstanceProperty[], name?: string): FlexiComponentInstance {
     return {
@@ -83,8 +85,8 @@ describe('transformFlexipageBundle', () => {
     expect(result).to.not.equal(false);
     const changed = result as Flexipage;
     const item = changed.flexiPageRegions[0].itemInstances[0];
-    expect(item.componentInstance.componentName).to.equal(targetComponentName);
-    expect(item.componentInstance.identifier).to.equal(`${targetIdentifier}1`);
+    expect(item.componentInstance.componentName).to.equal(lightningTargetComponentNameOS);
+    expect(item.componentInstance.identifier).to.equal('lightning_omnistudioOmniscript1');
     // Should not have 'target' property
     expect(item.componentInstance.componentInstanceProperties.find((p) => p.name === 'target')).to.be.undefined;
     // Should have new properties
@@ -220,9 +222,15 @@ describe('transformFlexipageBundle', () => {
     const changed = result as Flexipage;
 
     // Check sequential IDs
-    expect(changed.flexiPageRegions[0].itemInstances[0].componentInstance.identifier).to.equal(`${targetIdentifier}1`);
-    expect(changed.flexiPageRegions[0].itemInstances[1].componentInstance.identifier).to.equal(`${targetIdentifier}2`);
-    expect(changed.flexiPageRegions[0].itemInstances[2].componentInstance.identifier).to.equal(`${targetIdentifier}3`);
+    expect(changed.flexiPageRegions[0].itemInstances[0].componentInstance.identifier).to.equal(
+      'lightning_omnistudioOmniscript1'
+    );
+    expect(changed.flexiPageRegions[0].itemInstances[1].componentInstance.identifier).to.equal(
+      'lightning_omnistudioOmniscript2'
+    );
+    expect(changed.flexiPageRegions[0].itemInstances[2].componentInstance.identifier).to.equal(
+      'lightning_omnistudioOmniscript3'
+    );
   });
 
   it('generates sequential IDs for multiple FlexCard components on the same page', () => {
@@ -269,13 +277,13 @@ describe('transformFlexipageBundle', () => {
 
     // Check sequential IDs for FlexCards
     expect(changed.flexiPageRegions[0].itemInstances[0].componentInstance.identifier).to.equal(
-      'runtime_omnistudio_flexcard1'
+      'lightning_omnistudioFlexcard1'
     );
     expect(changed.flexiPageRegions[0].itemInstances[1].componentInstance.identifier).to.equal(
-      'runtime_omnistudio_flexcard2'
+      'lightning_omnistudioFlexcard2'
     );
     expect(changed.flexiPageRegions[0].itemInstances[2].componentInstance.identifier).to.equal(
-      'runtime_omnistudio_flexcard3'
+      'lightning_omnistudioFlexcard3'
     );
   });
 
@@ -333,13 +341,17 @@ describe('transformFlexipageBundle', () => {
     const changed = result as Flexipage;
 
     // Check sequential IDs for mixed components
-    expect(changed.flexiPageRegions[0].itemInstances[0].componentInstance.identifier).to.equal(`${targetIdentifier}1`);
-    expect(changed.flexiPageRegions[0].itemInstances[1].componentInstance.identifier).to.equal(
-      'runtime_omnistudio_flexcard1'
+    expect(changed.flexiPageRegions[0].itemInstances[0].componentInstance.identifier).to.equal(
+      'lightning_omnistudioOmniscript1'
     );
-    expect(changed.flexiPageRegions[0].itemInstances[2].componentInstance.identifier).to.equal(`${targetIdentifier}2`);
+    expect(changed.flexiPageRegions[0].itemInstances[1].componentInstance.identifier).to.equal(
+      'lightning_omnistudioFlexcard1'
+    );
+    expect(changed.flexiPageRegions[0].itemInstances[2].componentInstance.identifier).to.equal(
+      'lightning_omnistudioOmniscript2'
+    );
     expect(changed.flexiPageRegions[0].itemInstances[3].componentInstance.identifier).to.equal(
-      'runtime_omnistudio_flexcard2'
+      'lightning_omnistudioFlexcard2'
     );
   });
 
@@ -409,13 +421,17 @@ describe('transformFlexipageBundle', () => {
     const changed2 = result2 as Flexipage;
 
     // Check that sequence counters reset for second page
-    expect(changed1.flexiPageRegions[0].itemInstances[0].componentInstance.identifier).to.equal(`${targetIdentifier}1`);
-    expect(changed1.flexiPageRegions[0].itemInstances[1].componentInstance.identifier).to.equal(
-      'runtime_omnistudio_flexcard1'
+    expect(changed1.flexiPageRegions[0].itemInstances[0].componentInstance.identifier).to.equal(
+      'lightning_omnistudioOmniscript1'
     );
-    expect(changed2.flexiPageRegions[0].itemInstances[0].componentInstance.identifier).to.equal(`${targetIdentifier}1`);
+    expect(changed1.flexiPageRegions[0].itemInstances[1].componentInstance.identifier).to.equal(
+      'lightning_omnistudioFlexcard1'
+    );
+    expect(changed2.flexiPageRegions[0].itemInstances[0].componentInstance.identifier).to.equal(
+      'lightning_omnistudioOmniscript1'
+    );
     expect(changed2.flexiPageRegions[0].itemInstances[1].componentInstance.identifier).to.equal(
-      'runtime_omnistudio_flexcard1'
+      'lightning_omnistudioFlexcard1'
     );
   });
 
@@ -468,8 +484,12 @@ describe('transformFlexipageBundle', () => {
     const changed = result as Flexipage;
 
     // All should be transformed to lowercase and find the correct storage entries
-    expect(changed.flexiPageRegions[0].itemInstances[0].componentInstance.componentName).to.equal(targetComponentName);
-    expect(changed.flexiPageRegions[0].itemInstances[1].componentInstance.componentName).to.equal(targetComponentName);
+    expect(changed.flexiPageRegions[0].itemInstances[0].componentInstance.componentName).to.equal(
+      lightningTargetComponentNameOS
+    );
+    expect(changed.flexiPageRegions[0].itemInstances[1].componentInstance.componentName).to.equal(
+      lightningTargetComponentNameOS
+    );
   });
 
   it('handles mixed case FlexCard names correctly', () => {
@@ -504,10 +524,10 @@ describe('transformFlexipageBundle', () => {
 
     // All should be transformed to lowercase and find the correct storage entries
     expect(changed.flexiPageRegions[0].itemInstances[0].componentInstance.componentName).to.equal(
-      'runtime_omnistudio:flexcard'
+      lightningTargetComponentNameFC
     );
     expect(changed.flexiPageRegions[0].itemInstances[1].componentInstance.componentName).to.equal(
-      'runtime_omnistudio:flexcard'
+      lightningTargetComponentNameFC
     );
   });
 
@@ -541,7 +561,9 @@ describe('transformFlexipageBundle', () => {
     expect(result).to.not.equal(false);
     const changed = result as Flexipage;
 
-    expect(changed.flexiPageRegions[0].itemInstances[0].componentInstance.componentName).to.equal(targetComponentName);
+    expect(changed.flexiPageRegions[0].itemInstances[0].componentInstance.componentName).to.equal(
+      lightningTargetComponentNameOS
+    );
   });
 
   it('works with assess mode for mixed case FlexCard names', () => {
@@ -566,7 +588,7 @@ describe('transformFlexipageBundle', () => {
     const changed = result as Flexipage;
 
     expect(changed.flexiPageRegions[0].itemInstances[0].componentInstance.componentName).to.equal(
-      'runtime_omnistudio:flexcard'
+      lightningTargetComponentNameFC
     );
   });
 

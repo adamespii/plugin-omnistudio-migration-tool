@@ -25,6 +25,7 @@ export class GlobalAutoNumberAssessmentReporter {
     return {
       title: 'Omni Global Auto Numbers Assessment Report',
       heading: 'Omni Global Auto Numbers Assessment Report',
+      description: 'A high-level summary of the actions taken during the Omnistudio migration will appear here.',
       org: getOrgDetailsForReport(omnistudioOrgDetails),
       assessmentDate: new Date().toLocaleString(),
       reportType: 'globalautonumber',

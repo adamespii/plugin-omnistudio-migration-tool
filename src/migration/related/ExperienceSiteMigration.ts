@@ -30,6 +30,10 @@ const TARGET_COMPONENT_NAME_FC = 'runtime_omnistudio:flexcard';
 const TARGET_COMPONENT_NAME_OS_EXP = 'runtime_omnistudio:omniscriptExperienceCloud';
 const FLEXCARD_PREFIX = 'cf';
 
+/** Lightning wrappers (introduced in 260) */
+const LIGHTNING_TARGET_COMPONENT_NAME_OS = 'lightning:omnistudioOmniscript';
+const LIGHTNING_TARGET_COMPONENT_NAME_FC = 'lightning:omnistudioFlexcard';
+
 export class ExperienceSiteMigration extends BaseRelatedObjectMigration {
   private EXPERIENCE_SITES_PATH: string;
   private MIGRATE = 'Migrate';
@@ -334,7 +338,8 @@ export class ExperienceSiteMigration extends BaseRelatedObjectMigration {
       experienceSiteAssessmentInfo.warnings.push(warningMsg);
       experienceSiteAssessmentInfo.status = type === this.ASSESS ? 'Needs manual intervention' : 'Skipped';
     } else {
-      component.componentName = TARGET_COMPONENT_NAME_FC;
+      // Use Lightning wrappers (introduced in 260)
+      component.componentName = LIGHTNING_TARGET_COMPONENT_NAME_FC;
 
       const keysToDelete = ['target', 'layout', 'params', 'standalone'];
 
@@ -364,7 +369,8 @@ export class ExperienceSiteMigration extends BaseRelatedObjectMigration {
       experienceSiteAssessmentInfo.warnings.push(warningMsg);
       experienceSiteAssessmentInfo.status = type === this.ASSESS ? 'Needs manual intervention' : 'Skipped';
     } else {
-      component.componentName = TARGET_COMPONENT_NAME_OS;
+      // Use Lightning wrappers (introduced in 260)
+      component.componentName = LIGHTNING_TARGET_COMPONENT_NAME_OS;
 
       // Preserve the layout value before clearing
       const originalLayout = currentAttribute['layout'];
@@ -389,13 +395,15 @@ export class ExperienceSiteMigration extends BaseRelatedObjectMigration {
   }
 
   /**
-   * Check if component is an Omnistudio LWC component
+   * Check if component is an Omnistudio LWC component (runtime or Lightning wrappers)
    */
   private isOmnistudioStandardWrapper(componentName: string): boolean {
     return (
       componentName === TARGET_COMPONENT_NAME_OS ||
       componentName === TARGET_COMPONENT_NAME_FC ||
-      componentName === TARGET_COMPONENT_NAME_OS_EXP
+      componentName === TARGET_COMPONENT_NAME_OS_EXP ||
+      componentName === LIGHTNING_TARGET_COMPONENT_NAME_OS ||
+      componentName === LIGHTNING_TARGET_COMPONENT_NAME_FC
     );
   }
 
@@ -414,9 +422,13 @@ export class ExperienceSiteMigration extends BaseRelatedObjectMigration {
     const componentName = component.componentName;
     const attributes = component.componentAttributes;
 
-    if (componentName === TARGET_COMPONENT_NAME_OS || componentName === TARGET_COMPONENT_NAME_OS_EXP) {
+    if (
+      componentName === TARGET_COMPONENT_NAME_OS ||
+      componentName === TARGET_COMPONENT_NAME_OS_EXP ||
+      componentName === LIGHTNING_TARGET_COMPONENT_NAME_OS
+    ) {
       this.updateOmniScriptComponentReferences(attributes, experienceSiteAssessmentInfo, storage, type);
-    } else if (componentName === TARGET_COMPONENT_NAME_FC) {
+    } else if (componentName === TARGET_COMPONENT_NAME_FC || componentName === LIGHTNING_TARGET_COMPONENT_NAME_FC) {
       this.updateFlexCardComponentReferences(attributes, experienceSiteAssessmentInfo, storage, type);
     }
   }

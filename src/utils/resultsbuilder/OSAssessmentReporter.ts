@@ -29,6 +29,7 @@ export class OSAssessmentReporter {
     return {
       title: 'Omniscripts Assessment Report',
       heading: 'Omniscripts Assessment Report',
+      description: 'A high-level summary of the actions taken during the Omnistudio migration will appear here.',
       org: getOrgDetailsForReport(omnistudioOrgDetails),
       assessmentDate: new Date().toLocaleString(),
       total: OSAssessmentInfos?.length || 0,

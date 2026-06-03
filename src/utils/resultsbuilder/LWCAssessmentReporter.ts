@@ -23,6 +23,7 @@ export class LWCAssessmentReporter {
     return {
       title: 'Lightning Web Components Assessment Report',
       heading: 'Lightning Web Components Assessment Report',
+      description: 'A high-level summary of the actions taken during the Omnistudio migration will appear here.',
       org: getOrgDetailsForReport(omnistudioOrgDetails),
       assessmentDate: new Date().toLocaleString(),
       total: lwcAssessmentInfos?.length || 0,

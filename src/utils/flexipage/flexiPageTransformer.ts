@@ -23,16 +23,23 @@ import { isStandardDataModel } from '../dataModelService';
 
 /** Component name to look for during transformation */
 const lookupComponentName = 'vlocityLWCOmniWrapper';
-/** Target component name after transformation */
+
+/** Legacy runtime wrapper component names (used for detection in standard data model) */
 const targetComponentNameOS = 'runtime_omnistudio:omniscript';
-/** Target identifier after transformation */
-const targetIdentifierOS = 'runtime_omnistudio_omniscript';
+const targetComponentNameFlexCard = 'runtime_omnistudio:flexcard';
+
+/** Target component name - Lightning OmniScript wrapper (introduced in 260) */
+const lightningTargetComponentNameOS = 'lightning:omnistudioOmniscript';
+/** Target identifier - Lightning OmniScript wrapper */
+const lightningTargetIdentifierOS = 'lightning_omnistudioOmniscript';
+
+/** Target component name - Lightning FlexCard wrapper (introduced in 260) */
+const lightningTargetComponentNameFlexCard = 'lightning:omnistudioFlexcard';
+/** Target identifier - Lightning FlexCard wrapper */
+const lightningTargetIdentifierFlexCard = 'lightning_omnistudioFlexcard';
 
 let osSeq = 1;
 let fcSeq = 1;
-
-const targetComponentNameFlexCard = 'runtime_omnistudio:flexcard';
-const targetIdentifierFlexCard = 'runtime_omnistudio_flexcard';
 
 const flexCardPrefix = 'cf';
 
@@ -93,8 +100,11 @@ export function transformFlexipageBundle(
         item.componentInstance.componentName = targetComponentName;
         item.componentInstance.identifier = targetIdentifier;
       }
-      // Handle standard data model components
-      else if (isStandardDataModel() && componentName === targetComponentNameOS) {
+      // Handle standard data model components (both runtime_omnistudio and lightning wrappers)
+      else if (
+        isStandardDataModel() &&
+        (componentName === targetComponentNameOS || componentName === lightningTargetComponentNameOS)
+      ) {
         const currentType = item.componentInstance?.componentInstanceProperties?.find(
           (prop) => prop.name === 'type'
         )?.value;
@@ -119,7 +129,10 @@ export function transformFlexipageBundle(
             existingProp.value = value;
           }
         });
-      } else if (isStandardDataModel() && componentName === targetComponentNameFlexCard) {
+      } else if (
+        isStandardDataModel() &&
+        (componentName === targetComponentNameFlexCard || componentName === lightningTargetComponentNameFlexCard)
+      ) {
         const currentFlexCardName = item.componentInstance?.componentInstanceProperties?.find(
           (prop) => prop.name === 'flexcardName'
         )?.value;
@@ -202,8 +215,8 @@ function createNewPropsForOmniScript(
   };
 
   return {
-    componentName: targetComponentNameOS,
-    identifier: `${targetIdentifierOS}${osSeq++}`,
+    componentName: lightningTargetComponentNameOS,
+    identifier: `${lightningTargetIdentifierOS}${osSeq++}`,
     props: newProps,
   };
 }
@@ -237,8 +250,8 @@ function createNewPropsForFlexCard(
   };
 
   return {
-    componentName: targetComponentNameFlexCard,
-    identifier: `${targetIdentifierFlexCard}${fcSeq++}`,
+    componentName: lightningTargetComponentNameFlexCard,
+    identifier: `${lightningTargetIdentifierFlexCard}${fcSeq++}`,
     props: newProps,
   };
 }

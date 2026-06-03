@@ -298,7 +298,7 @@ describe('ExperienceSiteMigration', () => {
       const parsedContent = JSON.parse(writtenContent) as ExpSitePageJson;
       const component = parsedContent.regions[1].components[0];
 
-      expect(component.componentName).to.equal('runtime_omnistudio:omniscript');
+      expect(component.componentName).to.equal('lightning:omnistudioOmniscript');
       expect(component.componentAttributes.type).to.equal('TestType');
       expect(component.componentAttributes.subType).to.equal('TestSubtype');
       expect(component.componentAttributes.language).to.equal('English');
