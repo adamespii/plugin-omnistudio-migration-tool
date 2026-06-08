@@ -39,7 +39,9 @@ import {
   isStandardDataModelWithMetadataAPIEnabled,
 } from '../../../utils/dataModelService';
 import { NameMappingRegistry } from '../../../migration/NameMappingRegistry';
+import { ApexNamespaceRegistry } from '../../../migration/ApexNamespaceRegistry';
 import { ValidatorService } from '../../../utils/validatorService';
+import { OmniScriptInstanceMigrationTool } from '../../../migration/omniscriptInstance';
 
 // Initialize Messages with the current plugin directory
 Messages.importMessagesDirectory(__dirname);
@@ -209,6 +211,7 @@ export default class Migrate extends SfCommand<MigrateResult> {
     nameRegistry.clear(); // Clear any previous mappings
 
     Logger.log(messages.getMessage('startingComponentPreProcessing'));
+    await ApexNamespaceRegistry.getInstance().initialize(conn, namespace);
     await this.preProcessAllComponents(namespace, conn, migrateOnly);
 
     // Register the migration objects with CORRECTED ORDER
@@ -454,6 +457,7 @@ export default class Migrate extends SfCommand<MigrateResult> {
               data: this.mergeRecordAndUploadResults(r, cls),
               errors: r.errors,
               totalCount: r.totalCount, // Preserve totalCount for custom labels
+              allRecords: r.allRecords, // All records for CSV export
             };
           })
         );
@@ -577,6 +581,7 @@ export default class Migrate extends SfCommand<MigrateResult> {
       ];
       if (!isFoundationPackage()) {
         migrationObjects.push(new GlobalAutoNumberMigrationTool(namespace, conn, logger, messages, ux));
+        migrationObjects.push(new OmniScriptInstanceMigrationTool(namespace, conn, logger, messages, ux));
       }
     } else {
       // For single component migration, the order doesn't matter as much
@@ -606,6 +611,12 @@ export default class Migrate extends SfCommand<MigrateResult> {
           break;
         case Constants.CustomLabel:
           migrationObjects.push(new CustomLabelsMigrationTool(namespace, conn, logger, messages, ux));
+          break;
+        case Constants.SaveForLater:
+          if (isFoundationPackage()) {
+            Logger.warn(messages.getMessage('globalAutoNumberUnSupportedInOmnistudioPackage'));
+          }
+          migrationObjects.push(new OmniScriptInstanceMigrationTool(namespace, conn, logger, messages, ux));
           break;
         default:
           throw new Error(messages.getMessage('invalidOnlyFlag'));

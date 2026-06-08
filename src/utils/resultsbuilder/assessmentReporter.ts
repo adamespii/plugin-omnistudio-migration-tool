@@ -57,6 +57,15 @@ export class AssessmentReporter {
         reports.push(Constants.GlobalAutoNumber);
       }
 
+      // Add Save for Later to reports if data exists (for dashboard tile)
+      if (
+        result.saveForLaterAssessmentInfos &&
+        Array.isArray(result.saveForLaterAssessmentInfos) &&
+        result.saveForLaterAssessmentInfos.length > 0
+      ) {
+        reports.push(Constants.SaveForLater); // Using 'sfl' as the report identifier
+      }
+
       this.generateAllOmnistudioDocuments(
         result,
         instanceUrl,
@@ -170,8 +179,26 @@ export class AssessmentReporter {
       instanceUrl,
       omnistudioOrgDetails,
       messages,
-      template
+      template,
+      result.allCustomLabelAssessmentInfos || []
     );
+
+    // Generate Save for Later document if instances exist
+    if (
+      result.saveForLaterAssessmentInfos &&
+      Array.isArray(result.saveForLaterAssessmentInfos) &&
+      result.saveForLaterAssessmentInfos.length > 0
+    ) {
+      AssessmentReportHelper.generateSaveForLaterDocument(
+        this.basePath,
+        'saveforlater_assessment.html',
+        result,
+        instanceUrl,
+        omnistudioOrgDetails,
+        messages,
+        template
+      );
+    }
   }
 
   /**
@@ -258,6 +285,20 @@ export class AssessmentReporter {
           this.basePath,
           this.customLabelAssessmentFileName,
           result.customLabelAssessmentInfos || [],
+          instanceUrl,
+          omnistudioOrgDetails,
+          messages,
+          template,
+          result.allCustomLabelAssessmentInfos || []
+        );
+        break;
+
+      case Constants.SaveForLater:
+        reports.push(Constants.SaveForLater);
+        AssessmentReportHelper.generateSaveForLaterDocument(
+          this.basePath,
+          'saveforlater_assessment.html',
+          result,
           instanceUrl,
           omnistudioOrgDetails,
           messages,

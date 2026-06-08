@@ -9,6 +9,7 @@ import { TemplateParser } from '../../templateParser/generate';
 import { getOrgDetailsForReport } from '../../reportGenerator/reportUtil';
 import { CustomLabelAssessmentInfo } from '../../customLabels';
 import { Logger } from '../../logger';
+import { stripHtml, escapeCSVValue } from '../../stringUtils';
 import { isFoundationPackage, isStandardDataModelWithMetadataAPIEnabled } from '../../dataModelService';
 import { OSAssessmentReporter } from '../OSAssessmentReporter';
 import { ApexAssessmentReporter } from '../ApexAssessmentReporter';
@@ -20,6 +21,7 @@ import { GlobalAutoNumberAssessmentReporter } from '../GlobalAutoNumberAssessmen
 import { FlexipageAssessmentReporter } from '../FlexipageAssessmentReporter';
 import { ExperienceSiteAssessmentReporter } from '../ExperienceSiteAssessmentReporter';
 import { CustomLabelAssessmentReporter } from '../CustomLabelAssessmentReporter';
+import { SaveForLaterAssessmentReporter } from '../SaveForLaterAssessmentReporter';
 
 /**
  * Helper class for assessment report generation
@@ -37,6 +39,7 @@ export class AssessmentReportHelper {
   private static readonly EXPERIENCE_SITE_FILE = 'experience_site_assessment.html';
   private static readonly LWC_FILE = 'lwc_assessment.html';
   private static readonly CUSTOM_LABEL_FILE = 'customlabel_assessment.html';
+  private static readonly SAVE_FOR_LATER_FILE = 'saveforlater_assessment.html';
   private static readonly DASHBOARD_TEMPLATE_NAME = 'dashboard.template';
 
   // =============================================================================
@@ -115,6 +118,10 @@ export class AssessmentReportHelper {
     }
     if (reports.includes(Constants.CustomLabel)) {
       summaryItems.push(this.createCustomLabelSummaryItem(result));
+    }
+    // Save for Later is included when it's in the reports array
+    if (reports.includes(Constants.SaveForLater)) {
+      summaryItems.push(this.createSaveForLaterSummaryItem(result, messages));
     }
 
     return summaryItems;
@@ -367,6 +374,36 @@ export class AssessmentReportHelper {
   }
 
   /**
+   * Generates Save for Later assessment document
+   */
+  public static generateSaveForLaterDocument(
+    basePath: string,
+    fileName: string,
+    result: AssessmentInfo,
+    instanceUrl: string,
+    omnistudioOrgDetails: OmnistudioOrgDetails,
+    messages: Messages<string>,
+    template: string
+  ): void {
+    if (isStandardDataModelWithMetadataAPIEnabled()) {
+      return;
+    }
+
+    this.createDocument(
+      path.join(basePath, fileName),
+      TemplateParser.generate(
+        template,
+        SaveForLaterAssessmentReporter.getSaveForLaterAssessmentData(
+          result.saveForLaterAssessmentInfos || [],
+          instanceUrl,
+          omnistudioOrgDetails
+        ),
+        messages
+      )
+    );
+  }
+
+  /**
    * Generates Custom Label assessment document with pagination
    */
   public static generateCustomLabelDocument(
@@ -376,11 +413,19 @@ export class AssessmentReportHelper {
     instanceUrl: string,
     omnistudioOrgDetails: OmnistudioOrgDetails,
     messages: Messages<string>,
-    template: string
+    template: string,
+    allCustomLabels?: CustomLabelAssessmentInfo[]
   ): void {
     const pageSize = 1000;
     const totalLabels = customLabels.length;
     const totalPages = Math.max(1, Math.ceil(totalLabels / pageSize));
+
+    // Generate CSV file with all labels (including success records) for export
+    this.generateCustomLabelCsvFile(
+      basePath,
+      Constants.CustomLabelAssessmentCsvFileName,
+      allCustomLabels || customLabels
+    );
 
     // Generate paginated reports
     for (let page = 1; page <= totalPages; page++) {
@@ -392,6 +437,9 @@ export class AssessmentReportHelper {
         pageSize
       );
 
+      // Pass CSV filename in props so the export button can download it
+      data.props = JSON.stringify({ csvFile: Constants.CustomLabelAssessmentCsvFileName });
+
       const html = TemplateParser.generate(template, data, messages);
 
       const pageFileName = totalPages > 1 ? `customlabel_assessment_Page_${page}_of_${totalPages}.html` : fileName;
@@ -401,6 +449,49 @@ export class AssessmentReportHelper {
         messages.getMessage('generatedCustomLabelAssessmentReportPage', [page, totalPages, data.rows.length])
       );
     }
+  }
+
+  /**
+   * Generates a CSV file containing all custom label data for export
+   */
+  private static generateCustomLabelCsvFile(
+    basePath: string,
+    fileName: string,
+    allLabels: CustomLabelAssessmentInfo[]
+  ): void {
+    const headers = [
+      'Name',
+      'Package - Id',
+      'Package - Value',
+      'Core - Id',
+      'Core - Value',
+      'Assessment Status',
+      'Summary',
+    ];
+    const csvRows: string[] = [];
+
+    // Add BOM for Excel UTF-8 compatibility
+    csvRows.push(headers.map((h) => escapeCSVValue(h)).join(','));
+
+    // Sort labels by name for consistent ordering
+    const sortedLabels = [...allLabels].sort((a, b) => a.name.localeCompare(b.name));
+
+    for (const label of sortedLabels) {
+      const row = [
+        label.name || '',
+        label.packageId || '',
+        stripHtml(label.packageValue || ''),
+        label.coreId || '',
+        stripHtml(label.coreValue || ''),
+        label.assessmentStatus || '',
+        label.summary || '',
+      ];
+      csvRows.push(row.map((v) => escapeCSVValue(v)).join(','));
+    }
+
+    const csvContent = '﻿' + csvRows.join('\n');
+    fs.writeFileSync(path.join(basePath, fileName), csvContent, 'utf8');
+    Logger.logVerbose(`Generated custom label CSV export: ${fileName} with ${allLabels.length} records`);
   }
 
   // =============================================================================
@@ -528,6 +619,23 @@ export class AssessmentReportHelper {
       data: LWCAssessmentReporter.getSummaryData(result.lwcAssessmentInfos),
       file: this.LWC_FILE,
     };
+  }
+
+  private static createSaveForLaterSummaryItem(result: AssessmentInfo, messages: Messages<string>): SummaryItemParam {
+    // Ensure we have an array
+    const saveForLaterData = Array.isArray(result.saveForLaterAssessmentInfos)
+      ? result.saveForLaterAssessmentInfos
+      : result.saveForLaterAssessmentInfos
+      ? [result.saveForLaterAssessmentInfos]
+      : [];
+
+    return this.createSummaryItem(
+      'OmniScript Saved Sessions',
+      saveForLaterData,
+      this.SAVE_FOR_LATER_FILE,
+      SaveForLaterAssessmentReporter,
+      messages.getMessage('processingNotRequired')
+    );
   }
 
   private static createCustomLabelSummaryItem(result: AssessmentInfo): SummaryItemParam {

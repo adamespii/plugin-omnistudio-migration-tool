@@ -14,6 +14,7 @@ import {
   SortDirection,
 } from '../utils';
 import { BaseMigrationTool, ComponentType } from './base';
+import { CustomCssRegistry } from './CustomCssRegistry';
 import {
   InvalidEntityTypeError,
   MigrationResult,
@@ -41,11 +42,14 @@ import { StorageUtil } from '../utils/storageUtil';
 import { isStandardDataModel, isStandardDataModelWithMetadataAPIEnabled } from '../utils/dataModelService';
 import { prioritizeCleanNamesFirst } from '../utils/recordPrioritization';
 import { Constants } from '../utils/constants/stringContants';
+import { ApexNamespaceRegistry, ApexResolveStatus } from './ApexNamespaceRegistry';
 
 export class OmniScriptMigrationTool extends BaseMigrationTool implements MigrationTool {
   private readonly exportType: OmniScriptExportType;
   private readonly allVersions: boolean;
+  private hookRegisteredClasses: Set<string> = new Set();
   private IS_STANDARD_DATA_MODEL: boolean = isStandardDataModel();
+  private readonly apexNamespaceRegistry: ApexNamespaceRegistry = ApexNamespaceRegistry.getInstance();
 
   // Reserved keys that should not be used for storing output
   private readonly reservedKeys = new Set<string>(['Request', 'Response']);
@@ -79,6 +83,36 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
     super(namespace, connection, logger, messages, ux);
     this.exportType = exportType;
     this.allVersions = allVersions;
+    // Configure the shared Custom CSS registry. Idempotent — safe to call from
+    // both the OS and IP tool instances within a single assess run.
+    CustomCssRegistry.getInstance().init(connection, namespace, messages);
+  }
+
+  private async loadHookRegistrations(): Promise<Set<string>> {
+    try {
+      const objectName = `${this.namespacePrefix}CustomClassImplementation__c`;
+      const soql = `SELECT Id, Name FROM ${objectName} WHERE Name LIKE '%Hook' LIMIT 200`;
+      const result = await this.connection.query(soql);
+      const classes = new Set<string>();
+      if (result.totalSize > 0) {
+        for (const record of result.records as any[]) {
+          const hookName: string = record.Name || '';
+          if (hookName.endsWith('Hook')) {
+            classes.add(hookName.substring(0, hookName.length - 4));
+          }
+        }
+      }
+      return classes;
+    } catch (e) {
+      Logger.warn('Unable to query CustomClassImplementation__c for hook registrations: ' + e);
+      return new Set();
+    }
+  }
+
+  private hasHookForClass(remoteClass: string): boolean {
+    if (this.hookRegisteredClasses.size === 0 || !remoteClass) return false;
+    const simpleName = remoteClass.includes('.') ? remoteClass.split('.').pop() : remoteClass;
+    return this.hookRegisteredClasses.has(simpleName);
   }
 
   getName(
@@ -220,6 +254,9 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
     try {
       const exportComponentType = this.getName() as ComponentType;
       const omniscripts = await this.getAllOmniScripts();
+      if (this.exportType !== OmniScriptExportType.OS) {
+        this.hookRegisteredClasses = await this.loadHookRegistrations();
+      }
 
       if (isStandardDataModelWithMetadataAPIEnabled()) {
         // For the Standard Data Model Orgs, we only need to prepare the storage
@@ -406,8 +443,11 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
     const missingOS: string[] = [];
     const dependenciesRA: nameLocation[] = [];
     const dependenciesLWC: nameLocation[] = [];
+    const namespaceWarnings: string[] = [];
+    const namespaceErrors: string[] = [];
 
     //const missingRA: string[] = [];
+    const hookEnabledSteps: string[] = [];
 
     // Check for duplicate element names within the same OmniScript
     const elementNames = new Set<string>();
@@ -424,6 +464,9 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
         elementNames.add(elemName);
       }
     }
+
+    // Detect elements with corrupted parent-child level hierarchy
+    const corruptedParentChildElements = this.detectCorruptedParentChildElements(elements);
 
     for (const elem of elements) {
       const type = elem[this.getFieldKey('Type__c')];
@@ -498,12 +541,29 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
         const nameVal = `${elemName}`;
         const className = propertySet['remoteClass'];
         const methodName = propertySet['remoteMethod'];
-        if (className && methodName) dependenciesRA.push({ name: className + '.' + methodName, location: nameVal });
+        if (className && methodName) {
+          const status = this.apexNamespaceRegistry.resolveStatus(className);
+          const qualifiedClass = this.apexNamespaceRegistry.getQualifiedClassName(className);
+          dependenciesRA.push({ name: qualifiedClass + '.' + methodName, location: nameVal });
+          if (status === ApexResolveStatus.NAMESPACED) {
+            namespaceWarnings.push(
+              this.messages.getMessage('remoteActionNamespaceWarning', [nameVal, className, qualifiedClass])
+            );
+          } else if (status === ApexResolveStatus.NOT_FOUND) {
+            namespaceErrors.push(this.messages.getMessage('apexClassNotFound', [className, nameVal]));
+          }
+        }
+        if (className && this.hasHookForClass(className)) {
+          hookEnabledSteps.push(nameVal);
+        }
       }
       // To handle radio , multiselect
       if (propertySet['optionSource'] && propertySet['optionSource']['type'] === 'Custom') {
         const nameVal = `${elemName}`;
-        dependenciesRA.push({ name: propertySet['optionSource']['source'], location: nameVal });
+        const source = propertySet['optionSource']['source'];
+        if (source) {
+          dependenciesRA.push({ name: source, location: nameVal });
+        }
       }
 
       if (type === Constants.CustomLightningWebComponent) {
@@ -532,8 +592,8 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
     const existingOmniScriptNameVal = new StringVal(omniScriptName, 'name');
     let assessmentStatus: 'Ready for migration' | 'Warnings' | 'Needs manual intervention' = 'Ready for migration';
 
-    const warnings: string[] = [];
-    const errors: string[] = [];
+    const warnings: string[] = [...namespaceWarnings];
+    const errors: string[] = [...namespaceErrors];
 
     // Check for missing mandatory fields for Integration Procedures
     if (omniProcessType === 'Integration Procedure') {
@@ -679,12 +739,34 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
       assessmentStatus = 'Needs manual intervention';
     }
 
+    // Add warning for corrupted parent-child level hierarchy (elements at same level as their parent)
+    if (corruptedParentChildElements.size > 0) {
+      const corruptedNamesList = Array.from(corruptedParentChildElements).join(', ');
+      warnings.push(
+        this.messages.getMessage('corruptedParentChildLevel', [omniProcessType, corruptedNamesList, omniProcessType])
+      );
+      assessmentStatus = 'Needs manual intervention';
+    }
+
     if (omniProcessType === this.OMNISCRIPT) {
       const type = omniscript[this.getFieldKey('IsLwcEnabled__c')] ? 'LWC' : 'Angular';
       if (type === 'Angular') {
         warnings.unshift(this.messages.getMessage('angularOSWarning'));
         assessmentStatus = 'Needs manual intervention';
       }
+    }
+
+    // Scan custom Lightning/Newport stylesheets for managed-package namespace references.
+    // Any hit forces 'Needs manual intervention' because the migrated component will
+    // silently lose styling until the customer rewrites the stylesheet.
+    const hasStylesheetNamespaceRef = await this.collectStylesheetNamespaceDependencies(omniscript, warnings);
+    if (hasStylesheetNamespaceRef) {
+      assessmentStatus = 'Needs manual intervention';
+    }
+    if (namespaceErrors.length > 0) {
+      assessmentStatus = 'Needs manual intervention';
+    } else if (namespaceWarnings.length > 0 && assessmentStatus === 'Ready for migration') {
+      assessmentStatus = 'Warnings';
     }
 
     // Deduplicate all dependency arrays to ensure no duplicates
@@ -699,6 +781,10 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
     const uniqueMissingDR = [...new Set(missingDR)];
     const uniqueMissingIP = [...new Set(missingIP)];
     const uniqueMissingOS = [...new Set(missingOS)];
+
+    if (hookEnabledSteps.length > 0 && omniProcessType === 'Integration Procedure') {
+      warnings.push(this.messages.getMessage('prePostHookAutoEnabled', [hookEnabledSteps.join(', ')]));
+    }
 
     const result: OSAssessmentInfo = {
       name: recordName,
@@ -870,6 +956,9 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
   async migrate(): Promise<MigrationResult[]> {
     // Get All Records from OmniScript__c (IP & OS Parent Records)
     const omniscripts = await this.getAllOmniScripts();
+    if (this.exportType !== OmniScriptExportType.OS) {
+      this.hookRegisteredClasses = await this.loadHookRegistrations();
+    }
 
     if (isStandardDataModelWithMetadataAPIEnabled()) {
       return this.handleMigrationForStdDataModelOrgsWithMetadataAPIEnabled(omniscripts);
@@ -957,6 +1046,31 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
           hasErrors: false,
           errors: [],
           warnings: [this.messages.getMessage('invalidOrRepeatingOmniscriptElementNames', [duplicateNamesList])],
+          newName: '',
+          skipped: true,
+        };
+        osUploadInfo.set(recordId, skippedResponse);
+        originalOsRecords.set(recordId, omniscript);
+        continue;
+      }
+
+      // Check for corrupted parent-child level hierarchy (parent and child at same level)
+      const corruptedParentChildElements = this.detectCorruptedParentChildElements(elements);
+      if (corruptedParentChildElements.size > 0) {
+        const corruptedNamesList = Array.from(corruptedParentChildElements).join(', ');
+        const skippedResponse: UploadRecordResult = {
+          referenceId: recordId,
+          id: '',
+          success: false,
+          hasErrors: false,
+          errors: [],
+          warnings: [
+            this.messages.getMessage('corruptedParentChildLevel', [
+              omniProcessType,
+              corruptedNamesList,
+              omniProcessType,
+            ]),
+          ],
           newName: '',
           skipped: true,
         };
@@ -2014,6 +2128,9 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
       case Constants.RemoteAction:
         this.processRemoteAction(propSet);
         break;
+      case Constants.NavigateAction:
+        this.processNavigateAction(propSet);
+        break;
       default:
         // Handle other element types if needed
         break;
@@ -2251,6 +2368,65 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
   }
 
   /**
+   * Processes Navigate Action elements so the migrated parent OmniScript can launch its child
+   * under the standard runtime. The standard-runtime Navigate Action LWC reads
+   * `omniscript__type`, `omniscript__subType`, `omniscript__language` from the propertySet to
+   * resolve the child OmniScript (it does not consume `targetLWC`). Params on the URL bound for
+   * the OmniScript page must use the `omniscript__` prefix instead of the managed-package `c__`
+   * prefix.
+   * @param propSetMap Property set map from the element
+   */
+  private processNavigateAction(propSetMap: any): void {
+    if (propSetMap.targetType !== 'Vlocity OmniScript') {
+      return;
+    }
+
+    const lwcRef: string = typeof propSetMap.targetLWC === 'string' ? propSetMap.targetLWC : '';
+    if (lwcRef) {
+      // propertySet stores the LWC tag form ("c:foo" or "c__foo"); the ES-module form ("c/foo")
+      // never appears here, so stripping a leading "<ns>:" or "c__" covers all valid inputs.
+      const stripped = lwcRef
+        .replace(/^[^:]+:/, '')
+        .replace(/^c__/, '')
+        .toLowerCase();
+      const candidates = this.nameRegistry.getOmniScriptMappingKeys().filter((key) => {
+        const parts = key.split('_');
+        if (parts.length < 2) return false;
+        const type = parts[0];
+        const subType = parts[1];
+        const language = parts[2] || 'English';
+        const candidate = `${this.cleanName(type)}${this.cleanName(subType)}${language}`.toLowerCase();
+        return candidate === stripped;
+      });
+
+      if (candidates.length > 1) {
+        Logger.logVerbose(
+          `\nMultiple OmniScript registry keys collapse to the same LWC name '${lwcRef}': ${candidates.join(
+            ', '
+          )}. Using the first match.`
+        );
+      }
+
+      const match = candidates[0];
+      if (match) {
+        const cleanedFullName = this.nameRegistry.getCleanedName(match, 'OmniScript');
+        const cleanedParts = cleanedFullName.split('_');
+        if (cleanedParts.length >= 2) {
+          propSetMap.omniscript__type = cleanedParts[0];
+          propSetMap.omniscript__subType = cleanedParts[1];
+          propSetMap.omniscript__language = cleanedParts[2] || match.split('_')[2] || 'English';
+        }
+      } else {
+        Logger.logVerbose(`\n${this.messages.getMessage('componentMappingNotFound', ['OmniScript', lwcRef])}`);
+      }
+    }
+
+    if (typeof propSetMap.targetLWCParams === 'string' && propSetMap.targetLWCParams) {
+      propSetMap.targetLWCParams = propSetMap.targetLWCParams.replace(/(^|&)c__/g, '$1omniscript__');
+    }
+  }
+
+  /**
    * Processes Step elements to update reference names
    * @param propSetMap Property set map from the element
    */
@@ -2368,11 +2544,22 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
   }
 
   /**
-   * Processes Remote Action elements to update transform bundle references
+   * Processes Remote Action elements to update transform bundle references and qualify remoteClass with namespace
    * @param propSetMap Property set map from the element
    */
   private processRemoteAction(propSetMap: any): void {
     this.processTransformBundles(propSetMap);
+
+    if (propSetMap.remoteClass) {
+      propSetMap.remoteClass = this.apexNamespaceRegistry.getQualifiedClassName(propSetMap.remoteClass);
+    }
+
+    if (this.hasHookForClass(propSetMap.remoteClass)) {
+      const remoteOptions = propSetMap['remoteOptions'] || {};
+      remoteOptions['PreHook'] = true;
+      remoteOptions['PostHook'] = true;
+      propSetMap['remoteOptions'] = remoteOptions;
+    }
   }
 
   /**
@@ -2647,6 +2834,86 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
         }
       });
     });
+  }
+
+  /**
+   * Reads the OmniScript's custom Lightning/Newport stylesheet references from
+   * PropertySetConfig and warns if the referenced StaticResource's CSS body
+   * still contains the org's managed-package namespace string. Such references
+   * won't resolve after migration and would silently break styling, so the
+   * caller escalates `migrationStatus` to 'Needs manual intervention' on a hit.
+   *
+   * Heavy lifting (StaticResource lookup, body fetch, zip extraction, scan,
+   * cache) lives in {@link CustomCssRegistry} so the same cache can later be
+   * shared with FlexCard assessment without re-querying the same resources.
+   *
+   * @param omniscript The OmniScript/IP record being assessed.
+   * @param warnings   Warnings array on the in-progress OSAssessmentInfo (mutated).
+   * @returns          `true` if at least one namespace-referencing stylesheet
+   *                   was found and a warning was pushed.
+   */
+  private async collectStylesheetNamespaceDependencies(omniscript: AnyJson, warnings: string[]): Promise<boolean> {
+    const registry = CustomCssRegistry.getInstance();
+    if (!registry.isEnabled()) {
+      return false;
+    }
+
+    const propertySetConfigStr = omniscript[this.getFieldKey('PropertySet__c')];
+    if (!propertySetConfigStr) {
+      return false;
+    }
+
+    let propertySetConfig: any;
+    try {
+      propertySetConfig = JSON.parse(propertySetConfigStr);
+    } catch (ex) {
+      Logger.error(`Failed to parse PropertySetConfig for stylesheet scan: ${omniscript['Name']}`);
+      return false;
+    }
+
+    const { stylesheetsWithNamespaceRefs } = await registry.scanOmniScriptStylesheets(propertySetConfig?.stylesheet);
+    let pushed = false;
+    for (const resourceName of stylesheetsWithNamespaceRefs) {
+      const message = registry.buildOmniScriptNamespaceWarning(resourceName);
+      if (message) {
+        warnings.push(message);
+        pushed = true;
+      }
+    }
+    return pushed;
+  }
+
+  /**
+   * Detects elements that have a corrupted parent-child level hierarchy.
+   * In a valid OmniScript, a child element should always have a higher Level__c
+   * than its parent. When both parent and child are at the same level (typically level 0),
+   * it indicates data corruption that will cause elements to be lost during migration.
+   *
+   * @param elements - Array of element records queried from the OmniScript
+   * @returns Set of element names that have corrupted parent-child levels
+   */
+  private detectCorruptedParentChildElements(elements: AnyJson[]): Set<string> {
+    const corruptedElements = new Set<string>();
+
+    // Build a map of element IDs to their levels
+    const elementLevelMap = new Map<string, number>();
+    for (const elem of elements) {
+      elementLevelMap.set(elem['Id'], elem[this.getElementFieldKey('Level__c')]);
+    }
+
+    // Check each element: if it has a parent and both are at the same level, it's corrupted
+    for (const elem of elements) {
+      const parentId = elem[this.getElementFieldKey('ParentElementId__c')];
+      if (parentId && elementLevelMap.has(parentId)) {
+        const childLevel = elem[this.getElementFieldKey('Level__c')];
+        const parentLevel = elementLevelMap.get(parentId);
+        if (childLevel != null && parentLevel != null && childLevel === parentLevel) {
+          corruptedElements.add(elem['Name']);
+        }
+      }
+    }
+
+    return corruptedElements;
   }
 
   private getElementFieldKey(fieldName: string): string {

@@ -6,6 +6,7 @@ export const Constants = {
   DataMapper: 'dm',
   GlobalAutoNumber: 'autonumber',
   CustomLabel: 'cl',
+  SaveForLater: 'sfl',
   LWC: 'lwc',
   Apex: 'apex',
   FlexiPage: 'flexipage',
@@ -38,6 +39,21 @@ export const Constants = {
   DataAction: 'DataAction',
   CardAction: 'cardAction',
 
+  // FlexCard "Custom Web Page" navigation action targeting an OmniScript Universal Page
+  CustomActionType: 'Custom',
+  WebPageTargetType: 'Web Page',
+  OmniScriptUniversalPagePath: '/apex',
+  OmniScriptUniversalPageToken: 'OmniScriptUniversalPage',
+  OmniScriptTypeParam: 'OmniScriptType',
+  OmniScriptSubTypeParam: 'OmniScriptSubType',
+  OmniScriptLangParam: 'OmniScriptLang',
+  OmniScriptLayoutParam: 'layout',
+  OmniScriptStandardTypeParam: 'omniscript__type',
+  OmniScriptStandardSubTypeParam: 'omniscript__subType',
+  OmniScriptStandardLanguageParam: 'omniscript__language',
+  OmniScriptStandardThemeParam: 'omniscript__theme',
+  OmniScriptStandardPagePath: '/lightning/page/omnistudio/omniscript',
+
   // OmniScript element/action type constants
   IntegrationProcedureAction: 'Integration Procedure Action',
   DataRaptorTurboAction: 'DataRaptor Turbo Action',
@@ -53,10 +69,14 @@ export const Constants = {
   RemoteAction: 'Remote Action',
   StepElement: 'Step',
   CustomLightningWebComponent: 'Custom Lightning Web Component',
+  NavigateAction: 'Navigate Action',
+  VlocityAction: 'Vlocity Action',
 
   // artifacts persistance folder names
   AssessmentReportsFolderName: 'assessment_reports',
   MigrationReportsFolderName: 'migration_report',
+  CustomLabelAssessmentCsvFileName: 'customlabel_assessment_export.csv',
+  CustomLabelMigrationCsvFileName: 'customlabel_migration_export.csv',
 
   // custom label migration status constants
   CustomLabelInvalidStatuses: ['error', 'duplicate'],
@@ -72,24 +92,31 @@ export const Constants = {
   Off: 'off',
 
   // SObject API names
+  AttachmentObjectName: 'Attachment',
   OmniProcessObjectName: 'OmniProcess',
   OmniUiCardObjectName: 'OmniUiCard',
   OmniDataTransformObjectName: 'OmniDataTransform',
+  OmniscriptObjectName: 'OmniScript__c',
+  OmniScriptInstanceObjectName: 'OmniScriptInstance__c',
+  OmniScriptSavedSessionObjectName: 'OmniScriptSavedSession',
 
   // Config table names
   OmniScriptConfigTable: 'OmniScriptConfig',
   OmniIntegrationProcConfigTable: 'OmniIntegrationProcConfig',
   OmniDataTransformConfigTable: 'OmniDataTransformConfig',
   OmniUiCardConfigTable: 'OmniUiCardConfig',
+
+  // Display names
+  OmniScriptSavedSessionsDisplayName: 'OmniScript Saved Sessions',
 };
 
 export const Status = {
-  SuccessfullyMigrated: 'Successfully migrated',
-  Failed: 'Failed',
-  Skipped: 'Skipped',
   Complete: 'Complete',
-  ReadyForMigration: 'Ready for migration',
-  NeedsManualIntervention: 'Needs manual intervention',
+  Failed: 'Failed',
   ManualDeploymentNeeded: 'Manual deployment needed',
+  NeedsManualIntervention: 'Needs manual intervention',
+  ReadyForMigration: 'Ready for migration',
+  Skipped: 'Skipped',
   SuccessfullyCompleted: 'Successfully Completed',
+  SuccessfullyMigrated: 'Successfully migrated',
 };

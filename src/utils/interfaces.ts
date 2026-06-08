@@ -7,6 +7,8 @@ export interface MigratedObject {
   records?: Record<string, unknown>; // For consolidated map approach - using Record<string, unknown> to avoid type conflicts
   errors?: string[];
   totalCount?: number; // Optional total count for dashboard calculation
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  allRecords?: Map<string, any>; // All records including success for CSV export
 }
 
 export interface MigratedRecordInfo {
@@ -117,6 +119,28 @@ export interface FileProcessor {
   process(file: File, type: string, namespace: string): void;
 }
 
+export interface SaveForLaterAssessmentInfo {
+  id: string;
+  name: string;
+  oldName: string;
+  omniScriptId: string;
+  omniScriptName: string;
+  status: string;
+  lastSaved: string;
+  migrationStatus: 'Failed' | 'Needs manual intervention' | 'Ready for migration' | 'Skipped' | 'Warnings';
+  infos: string[];
+  dependenciesOS: string[];
+  errors: string[];
+  warnings: string[];
+  omniScriptMigrationStatus?:
+    | 'Complete'
+    | 'Failed'
+    | 'Migration completed'
+    | 'Needs manual intervention'
+    | 'Ready for migration'
+    | 'Skipped';
+}
+
 export interface AssessmentInfo {
   apexAssessmentInfos: ApexAssessmentInfo[];
   lwcAssessmentInfos: LWCAssessmentInfo[];
@@ -127,7 +151,9 @@ export interface AssessmentInfo {
   flexipageAssessmentInfos: FlexiPageAssessmentInfo[];
   globalAutoNumberAssessmentInfos: GlobalAutoNumberAssessmentInfo[];
   customLabelAssessmentInfos: CustomLabelAssessmentInfo[];
+  allCustomLabelAssessmentInfos: CustomLabelAssessmentInfo[];
   customLabelStatistics: CustomLabelStatistics;
+  saveForLaterAssessmentInfos: SaveForLaterAssessmentInfo[];
 }
 
 export interface RelatedObjectAssesmentInfo {
@@ -146,6 +172,7 @@ export interface FlexCardAssessmentInfo {
   dependenciesFC: string[];
   dependenciesLWC: string[];
   dependenciesApexRemoteAction: string[];
+  dependenciesVlocityAction: string[];
   infos: string[];
   warnings: string[];
   errors: string[];

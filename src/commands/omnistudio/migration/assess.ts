@@ -5,6 +5,7 @@ import { SfCommand, Ux, Flags as flags } from '@salesforce/sf-plugins-core';
 import { AssessmentInfo } from '../../../utils/interfaces';
 import { AssessmentReporter } from '../../../utils/resultsbuilder/assessmentReporter';
 import { OmniScriptExportType, OmniScriptMigrationTool } from '../../../migration/omniscript';
+import { OmniScriptInstanceMigrationTool } from '../../../migration/omniscriptInstance';
 import { InvalidEntityTypeError } from '../../../migration/interfaces';
 import { CardMigrationTool } from '../../../migration/flexcard';
 import { DataRaptorMigrationTool } from '../../../migration/dataraptor';
@@ -29,6 +30,7 @@ import {
 
 import { ValidatorService } from '../../../utils/validatorService';
 import { OmniStudioMetadataCleanupService } from '../../../utils/config/OmniStudioMetadataCleanupService';
+import { ApexNamespaceRegistry } from '../../../migration/ApexNamespaceRegistry';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('@salesforce/plugin-omnistudio-migration-tool', 'assess');
@@ -177,6 +179,7 @@ export default class Assess extends SfCommand<AssessmentInfo> {
       flexipageAssessmentInfos: [],
       experienceSiteAssessmentInfos: [],
       customLabelAssessmentInfos: [],
+      allCustomLabelAssessmentInfos: [],
       customLabelStatistics: {
         totalLabels: 0,
         readyForMigration: 0,
@@ -184,6 +187,7 @@ export default class Assess extends SfCommand<AssessmentInfo> {
         warnings: 0,
         failed: 0,
       },
+      saveForLaterAssessmentInfos: [],
     };
 
     Logger.log(messages.getMessage('assessmentInitialization', [String(namespace)]));
@@ -193,6 +197,9 @@ export default class Assess extends SfCommand<AssessmentInfo> {
     Logger.logVerbose(messages.getMessage('allVersionsFlagInfo', [String(allVersions)]));
 
     try {
+      // Initialize ApexNamespaceRegistry with local and namespaced Apex classes
+      await ApexNamespaceRegistry.getInstance().initialize(conn, namespace);
+
       // Assess OmniStudio components
       await this.assessOmniStudioComponents(assesmentInfo, assessOnly, namespace, conn, allVersions, ux);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -281,7 +288,10 @@ export default class Assess extends SfCommand<AssessmentInfo> {
       await this.assessFlexCards(assesmentInfo, namespace, conn, allVersions, ux);
       await this.assessOmniScripts(assesmentInfo, namespace, conn, allVersions, OmniScriptExportType.OS, ux);
       await this.assessOmniScripts(assesmentInfo, namespace, conn, allVersions, OmniScriptExportType.IP, ux);
+
       if (!isFoundationPackage()) {
+        // Omniscript's Save For Later
+        await this.assessSaveForLater(assesmentInfo, namespace, conn, ux);
         await this.assessGlobalAutoNumbers(assesmentInfo, namespace, conn, ux);
       }
       await this.assessCustomLabels(assesmentInfo, namespace, conn);
@@ -310,6 +320,16 @@ export default class Assess extends SfCommand<AssessmentInfo> {
         break;
       case Constants.CustomLabel:
         await this.assessCustomLabels(assesmentInfo, namespace, conn);
+        break;
+      case Constants.SaveForLater:
+        if (!isFoundationPackage()) {
+          // First assess OmniScripts to get dependency information
+          await this.assessOmniScripts(assesmentInfo, namespace, conn, allVersions, OmniScriptExportType.OS, ux);
+          // Then assess Save for Later with OmniScript info
+          await this.assessSaveForLater(assesmentInfo, namespace, conn, ux);
+        } else {
+          Logger.warn(messages.getMessage('saveForLaterNotSupportedInFoundationPackage'));
+        }
         break;
       default:
         throw new Error(messages.getMessage('invalidOnlyFlag'));
@@ -396,6 +416,23 @@ export default class Assess extends SfCommand<AssessmentInfo> {
     }
   }
 
+  private async assessSaveForLater(
+    assesmentInfo: AssessmentInfo,
+    namespace: string,
+    conn: Connection,
+    ux: Ux
+  ): Promise<void> {
+    const saveForLaterMigrator = new OmniScriptInstanceMigrationTool(namespace, conn, Logger, messages, ux);
+    // Pass OmniScript assessment info to check dependencies
+    assesmentInfo.saveForLaterAssessmentInfos = await saveForLaterMigrator.assess(assesmentInfo.omniAssessmentInfo);
+    this.logAssessmentCompletionIfNeeded(
+      'assessedOmniScriptsCount',
+      'omniScriptAssessmentCompleted',
+      assesmentInfo.saveForLaterAssessmentInfos.length,
+      ['OmniScript Saved Sessions']
+    );
+  }
+
   private async assessGlobalAutoNumbers(
     assesmentInfo: AssessmentInfo,
     namespace: string,
@@ -419,11 +456,13 @@ export default class Assess extends SfCommand<AssessmentInfo> {
       Logger.log(messages.getMessage('startingCustomLabelAssessment'));
       const customLabelResult = await CustomLabelsUtil.fetchCustomLabels(conn, namespace, messages);
       assesmentInfo.customLabelAssessmentInfos = customLabelResult.labels;
+      assesmentInfo.allCustomLabelAssessmentInfos = customLabelResult.allLabels;
       assesmentInfo.customLabelStatistics = customLabelResult.statistics;
       Logger.log(messages.getMessage('customLabelAssessmentCompleted'));
     } catch (error) {
       Logger.error(messages.getMessage('errorDuringCustomLabelAssessment', [(error as Error).message]));
       assesmentInfo.customLabelAssessmentInfos = [];
+      assesmentInfo.allCustomLabelAssessmentInfos = [];
       assesmentInfo.customLabelStatistics = {
         totalLabels: 0,
         readyForMigration: 0,
