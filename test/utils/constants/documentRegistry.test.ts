@@ -1,4 +1,7 @@
 import { execSync } from 'child_process';
+import { rmSync, existsSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
 import puppeteer from 'puppeteer';
 import { expect } from 'chai';
 import { documentRegistry } from '../../../src/utils/constants/documentRegistry';
@@ -10,6 +13,14 @@ before(function () {
   if (process.env.CI === 'true') {
     try {
       Logger.info('CI environment detected. Installing Chrome for Puppeteer...');
+      // Clear any corrupted browser cache before installing to avoid
+      // "browser folder exists but executable is missing" errors in CI.
+      // Puppeteer caches browsers under ~/.cache/puppeteer by default.
+      const puppeteerCacheDir = join(homedir(), '.cache', 'puppeteer', 'chrome');
+      if (existsSync(puppeteerCacheDir)) {
+        rmSync(puppeteerCacheDir, { recursive: true, force: true });
+        Logger.info(`Cleared existing Chrome cache at ${puppeteerCacheDir}`);
+      }
       execSync('npx --yes puppeteer browsers install chrome', { stdio: 'inherit' });
       Logger.info('Chrome installed successfully.');
     } catch (error) {
