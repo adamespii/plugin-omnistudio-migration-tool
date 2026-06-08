@@ -91,9 +91,11 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
   private async loadHookRegistrations(): Promise<Set<string>> {
     try {
       const objectName = `${this.namespacePrefix}CustomClassImplementation__c`;
-      const soql = `SELECT Id, Name FROM ${objectName} WHERE Name LIKE '%Hook' LIMIT 200`;
+      console.log(`SELECT Id, Name FROM ${objectName} LIMIT 200`);
+      const soql = `SELECT Id, Name FROM ${objectName} LIMIT 200`;
       const result = await this.connection.query(soql);
       const classes = new Set<string>();
+      console.log('result', result);
       if (result.totalSize > 0) {
         for (const record of result.records as any[]) {
           const hookName: string = record.Name || '';
@@ -110,8 +112,10 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
   }
 
   private hasHookForClass(remoteClass: string): boolean {
+    console.log('hasHookForClass remoteClass', remoteClass);
     if (this.hookRegisteredClasses.size === 0 || !remoteClass) return false;
     const simpleName = remoteClass.includes('.') ? remoteClass.split('.').pop() : remoteClass;
+    console.log('simpleName', simpleName);
     return this.hookRegisteredClasses.has(simpleName);
   }
 
@@ -784,6 +788,7 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
     const uniqueMissingOS = [...new Set(missingOS)];
 
     if (hookEnabledSteps.length > 0 && omniProcessType === 'Integration Procedure') {
+      console.log('hookEnabledSteps', hookEnabledSteps);
       warnings.push(this.messages.getMessage('prePostHookAutoEnabled', [hookEnabledSteps.join(', ')]));
     }
 
@@ -2487,6 +2492,7 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
    * @param propSetMap Property set map from the element
    */
   private processRemoteAction(propSetMap: any): void {
+    console.log('processRemoteAction remoteClass', propSetMap.remoteClass);
     this.processTransformBundles(propSetMap);
 
     if (propSetMap.remoteClass) {
@@ -2494,6 +2500,7 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
     }
 
     if (this.hasHookForClass(propSetMap.remoteClass)) {
+      console.log('remoteClass', propSetMap.remoteClass);
       const remoteOptions = propSetMap['remoteOptions'] || {};
       remoteOptions['PreHook'] = true;
       remoteOptions['PostHook'] = true;
