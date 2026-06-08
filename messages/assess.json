@@ -252,5 +252,6 @@
   "noOmniscriptFoundForOsInstance": "No Omniscript found for OmniscriptInstance \"%s\"",
   "omniscriptNeedsToBeMigrated": "Omniscript \"%s\" needs to be migrated.",
   "errorDuringSaveForLaterAssessment": "Errors occurred during the Save for Later assessment:",
-  "prePostHookAutoEnabled": "PreHook/PostHook will be auto-enabled on Remote Action step(s): %s. A hook implementation is registered for the remote class used by these steps."
+  "prePostHookAutoEnabled": "PreHook/PostHook will be auto-enabled on Remote Action step(s): %s. A hook implementation is registered for the remote class used by these steps.",
+  "cleanupMetadataTablesRequired": "Omnistudio configuration tables contain records. Back up your Omnistudio component table data, and manually clean up the Omnistudio configuration tables. <a href='https://help.salesforce.com/s/articleView?id=xcloud.os_enable_omnistudio_metadata_api_support.htm&type=5' target='_blank'>Learn more about cleaning up tables in Salesforce Help</a>"
 }
