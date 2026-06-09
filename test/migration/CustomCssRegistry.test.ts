@@ -35,13 +35,13 @@ function buildMockMessages(): any {
   return {
     getMessage: (key: string, args?: string[]) => {
       if (key === 'customCssStylesheetNamespaceWarningOmniScript') {
-        return `Custom CSS stylesheet '${args?.[0]}' has namespace references, OmniScript styles may break after migration.`;
+        return `Custom CSS stylesheet '${args?.[0]}' has namespace references. Styles may break after migration.`;
       }
       if (key === 'customCssStylesheetNamespaceWarningFlexCard') {
-        return `Custom CSS stylesheet '${args?.[0]}' has namespace references, FlexCard styles may break after migration.`;
+        return `Custom CSS stylesheet '${args?.[0]}' has namespace references. Styles may break after migration.`;
       }
       if (key === 'customCssInlineNamespaceWarning') {
-        return 'Custom inline CSS has namespace references, styles may break after migration.';
+        return 'Custom CSS has namespace references. Styles may break after migration.';
       }
       return `Mock message: ${key}`;
     },
