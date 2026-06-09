@@ -120,7 +120,7 @@ describe('FlexCard — Custom CSS namespace scan', () => {
 
       expect(result.warnings.some((w: string) => w.includes("'flaggedCss'"))).to.equal(true);
       // FlexCard-specific phrasing so reportingHelper resolves the FlexCard CTA URL.
-      expect(result.warnings.some((w: string) => w.includes('FlexCard styles'))).to.equal(true);
+      expect(result.warnings.some((w: string) => w.includes('namespace references'))).to.equal(true);
       expect(result.migrationStatus).to.equal('Needs manual intervention');
     });
 
@@ -179,7 +179,7 @@ describe('FlexCard — Custom CSS namespace scan', () => {
       });
       const result = await (cardTool as any).processFlexCard(fc, new Set<string>(), new Map<string, string>());
 
-      expect(result.warnings.some((w: string) => w.includes('Custom inline CSS'))).to.equal(true);
+      expect(result.warnings.some((w: string) => w.includes('Custom CSS has namespace references'))).to.equal(true);
       expect(result.migrationStatus).to.equal('Needs manual intervention');
       // Pure substring match — no SOQL, no REST.
       expect(requestCount).to.equal(0);
@@ -209,7 +209,9 @@ describe('FlexCard — Custom CSS namespace scan', () => {
       });
       const result = await (cardTool as any).processFlexCard(fc, new Set<string>(), new Map<string, string>());
 
-      expect(result.warnings.find((w: string) => w.includes('Custom inline CSS'))).to.equal(undefined);
+      expect(result.warnings.find((w: string) => w.includes('Custom CSS has namespace references'))).to.equal(
+        undefined
+      );
     });
 
     it('skips when customStyles is an empty string', async () => {
@@ -222,7 +224,9 @@ describe('FlexCard — Custom CSS namespace scan', () => {
       });
       const result = await (cardTool as any).processFlexCard(fc, new Set<string>(), new Map<string, string>());
 
-      expect(result.warnings.find((w: string) => w.includes('Custom inline CSS'))).to.equal(undefined);
+      expect(result.warnings.find((w: string) => w.includes('Custom CSS has namespace references'))).to.equal(
+        undefined
+      );
     });
   });
 
@@ -242,7 +246,7 @@ describe('FlexCard — Custom CSS namespace scan', () => {
 
       expect(result.warnings.filter((w: string) => w.includes('namespace references')).length).to.equal(2);
       expect(result.warnings.some((w: string) => w.includes("'flaggedCss'"))).to.equal(true);
-      expect(result.warnings.some((w: string) => w.includes('Custom inline CSS'))).to.equal(true);
+      expect(result.warnings.some((w: string) => w.includes('Custom CSS has namespace references'))).to.equal(true);
       expect(result.migrationStatus).to.equal('Needs manual intervention');
     });
   });

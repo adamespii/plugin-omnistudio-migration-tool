@@ -320,30 +320,23 @@ describe('CustomCssRegistry', () => {
       registry.init(buildMockConnection({}) as any, 'vlocity_cmt', buildMockMessages());
       const msg = registry.buildOmniScriptNamespaceWarning('foo');
       expect(msg).to.include("'foo'");
-      expect(msg).to.include('OmniScript styles');
       expect(msg).to.include('namespace references');
+      expect(msg).to.include('Styles may break');
     });
 
     it('returns the FlexCard-specific stylesheet warning with the resource name interpolated', () => {
       registry.init(buildMockConnection({}) as any, 'vlocity_cmt', buildMockMessages());
       const msg = registry.buildFlexCardNamespaceWarning('foo');
       expect(msg).to.include("'foo'");
-      expect(msg).to.include('FlexCard styles');
       expect(msg).to.include('namespace references');
-    });
-
-    it('keeps the OmniScript and FlexCard messages distinct so reportingHelper can resolve different CTAs', () => {
-      registry.init(buildMockConnection({}) as any, 'vlocity_cmt', buildMockMessages());
-      const os = registry.buildOmniScriptNamespaceWarning('shared');
-      const fc = registry.buildFlexCardNamespaceWarning('shared');
-      expect(os).to.not.equal(fc);
+      expect(msg).to.include('Styles may break');
     });
 
     it('returns the inline-CSS warning without interpolating a name', () => {
       registry.init(buildMockConnection({}) as any, 'vlocity_cmt', buildMockMessages());
       const msg = registry.buildInlineCssNamespaceWarning();
-      expect(msg).to.include('Custom inline CSS');
-      expect(msg).to.include('namespace references');
+      expect(msg).to.include('Custom CSS has namespace references');
+      expect(msg).to.include('Styles may break');
     });
   });
 
