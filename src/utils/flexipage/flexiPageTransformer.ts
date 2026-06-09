@@ -173,7 +173,12 @@ function createNewProps(
   componentInstanceProperties: FlexiComponentInstanceProperty[]
 ): { componentName: string; identifier: string; props: Record<string, string> } {
   if (nameKey.startsWith(flexCardPrefix)) {
-    return createNewPropsForFlexCard(nameKey.substring(flexCardPrefix.length).toLowerCase(), namespace, mode);
+    return createNewPropsForFlexCard(
+      nameKey.substring(flexCardPrefix.length).toLowerCase(),
+      namespace,
+      mode,
+      componentInstanceProperties
+    );
   }
   return createNewPropsForOmniScript(nameKey.toLowerCase(), namespace, mode, componentInstanceProperties);
 }
@@ -203,7 +208,7 @@ function createNewPropsForOmniScript(
     throw new DuplicateKeyError(nameKey, 'Omniscript');
   }
 
-  const newProps = {
+  const newProps: Record<string, string> = {
     language: migratedScriptName.language || 'English',
     subType: migratedScriptName.subtype,
     type: migratedScriptName.type,
@@ -213,6 +218,15 @@ function createNewPropsForOmniScript(
     display: 'Display OmniScript on page',
     direction: 'ltr',
   };
+
+  // Pass through additional properties supported by the lightning wrapper
+  const passthroughPropsOS = ['prefill', 'recordId'];
+  for (const propName of passthroughPropsOS) {
+    const existingProp = componentInstanceProperties.find((prop) => prop.name === propName);
+    if (existingProp?.value) {
+      newProps[propName] = existingProp.value;
+    }
+  }
 
   return {
     componentName: lightningTargetComponentNameOS,
@@ -224,7 +238,8 @@ function createNewPropsForOmniScript(
 function createNewPropsForFlexCard(
   nameKey: string,
   namespace: string,
-  mode: 'assess' | 'migrate'
+  mode: 'assess' | 'migrate',
+  componentInstanceProperties?: FlexiComponentInstanceProperty[]
 ): { componentName: string; identifier: string; props: Record<string, string> } {
   let migratedCardName: FlexcardStorage;
   if (mode === 'assess') {
@@ -245,9 +260,20 @@ function createNewPropsForFlexCard(
     throw new DuplicateKeyError(nameKey, 'Flexcard');
   }
 
-  const newProps = {
+  const newProps: Record<string, string> = {
     flexcardName: migratedCardName.name,
   };
+
+  // Pass through additional properties supported by the lightning wrapper
+  if (componentInstanceProperties) {
+    const passthroughPropsFC = ['recordId', 'objectApiName'];
+    for (const propName of passthroughPropsFC) {
+      const existingProp = componentInstanceProperties.find((prop) => prop.name === propName);
+      if (existingProp?.value) {
+        newProps[propName] = existingProp.value;
+      }
+    }
+  }
 
   return {
     componentName: lightningTargetComponentNameFlexCard,
