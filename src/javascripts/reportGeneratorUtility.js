@@ -702,7 +702,7 @@ function exportTableToCSV(tableId) {
  */
 function showExportSuccess(button) {
   if (!button) return;
-  button.textContent = '✓ Exported';
+  button.textContent = 'Exported Successfully';
   button.style.backgroundColor = '#2e844a';
   button.disabled = false;
   setTimeout(() => {
