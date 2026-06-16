@@ -7,6 +7,7 @@ export class Logger {
   private static sfUX: Ux;
   private static sfLogger: SfLogger;
   private static verbose = false;
+  private static progressBarActive = false;
 
   public static initialiseLogger(ux: Ux, logger: SfLogger, command?: string, verbose?: boolean): Logger {
     Logger.sfUX = ux;
@@ -24,8 +25,20 @@ export class Logger {
     return Logger.verbose;
   }
 
+  /**
+   * Call this when a progress bar starts rendering to suppress stdout logging.
+   * While active, log/error/warn messages go only to the file log.
+   */
+  public static setProgressBarActive(active: boolean): void {
+    Logger.progressBarActive = active;
+  }
+
+  public static isProgressBarActive(): boolean {
+    return Logger.progressBarActive;
+  }
+
   public static logVerbose(message: string): void {
-    if (Logger.verbose && Logger.sfUX) {
+    if (Logger.verbose && Logger.sfUX && !Logger.progressBarActive) {
       Logger.sfUX.log(message);
     }
     FileLogger.writeLog('VERBOSE', message);
@@ -46,32 +59,33 @@ export class Logger {
   }
 
   public static log(message: string): void {
-    if (Logger.sfUX) {
+    if (Logger.sfUX && !Logger.progressBarActive) {
       Logger.sfUX.log(message);
     }
     FileLogger.writeLog('INFO', message);
   }
 
   public static warn(message: string): void {
-    if (Logger.sfUX) {
+    if (Logger.sfUX && !Logger.progressBarActive) {
       Logger.sfUX.warn(message);
     }
     FileLogger.writeLog('WARN', message);
   }
 
   public static error(message: string | Error, error?: Error): void {
-    if (Logger.sfUX) {
-      if (message instanceof Error) {
-        Logger.sfUX.log(`\x1b[31m${message.message}\n${message.stack}\x1b[0m`);
-      } else {
-        if (error) {
-          Logger.sfUX.log(`\x1b[31m${error.message}\n${error.stack}\x1b[0m`);
-        } else {
-          Logger.sfUX.log(`\x1b[31m${message}\x1b[0m`);
-        }
-      }
+    if (Logger.sfUX && !Logger.progressBarActive) {
+      // Only print a clean one-line message to stdout (no stack traces)
+      const displayMessage = message instanceof Error ? message.message : message;
+      Logger.sfUX.log(`\x1b[31m${displayMessage}\x1b[0m`);
     }
-    FileLogger.writeLog('ERROR', message instanceof Error ? `${message.message}\n${message.stack}` : message);
+    // Write full error details (including stack traces) to the file log
+    if (message instanceof Error) {
+      FileLogger.writeLog('ERROR', `${message.message}\n${message.stack}`);
+    } else if (error) {
+      FileLogger.writeLog('ERROR', `${message}\n${error.message}\n${error.stack}`);
+    } else {
+      FileLogger.writeLog('ERROR', message);
+    }
   }
 
   public static debug(message: string): void {

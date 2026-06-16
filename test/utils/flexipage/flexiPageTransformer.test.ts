@@ -25,9 +25,9 @@ describe('transformFlexipageBundle', () => {
   const namespace = 'clocity_ins';
   const lookupComponentName = 'vlocityLWCOmniWrapper';
 
-  // Lightning wrappers (introduced in 260) - target component names
-  const lightningTargetComponentNameOS = 'lightning:omnistudioOmniscript';
-  const lightningTargetComponentNameFC = 'lightning:omnistudioFlexcard';
+  // Target component names after transformation
+  const targetComponentNameOS = 'runtime_omnistudio:omniscript';
+  const targetComponentNameFC = 'runtime_omnistudio:flexcard';
 
   function makeComponentInstance(props: FlexiComponentInstanceProperty[], name?: string): FlexiComponentInstance {
     return {
@@ -85,8 +85,8 @@ describe('transformFlexipageBundle', () => {
     expect(result).to.not.equal(false);
     const changed = result as Flexipage;
     const item = changed.flexiPageRegions[0].itemInstances[0];
-    expect(item.componentInstance.componentName).to.equal(lightningTargetComponentNameOS);
-    expect(item.componentInstance.identifier).to.equal('lightning_omnistudioOmniscript1');
+    expect(item.componentInstance.componentName).to.equal(targetComponentNameOS);
+    expect(item.componentInstance.identifier).to.equal('runtime_omnistudio_omniscript1');
     // Should not have 'target' property
     expect(item.componentInstance.componentInstanceProperties.find((p) => p.name === 'target')).to.be.undefined;
     // Should have new properties
@@ -100,6 +100,226 @@ describe('transformFlexipageBundle', () => {
     expect(item.componentInstance.componentInstanceProperties.find((p) => p.name === 'direction')).to.exist;
     // Should not keep other properties (implementation replaces all properties)
     expect(item.componentInstance.componentInstanceProperties.find((p) => p.name === 'other')).to.be.undefined;
+  });
+
+  it('passes through prefill property when present in source OmniScript component', () => {
+    // Mock StorageUtil
+    const mockStorage = {
+      osStorage: new Map([
+        [
+          'subtype',
+          {
+            type: 'OSForCustomLWC',
+            originalType: 'OSForCustomLWC',
+            subtype: 'OSForCustomLWC',
+            originalSubtype: 'OSForCustomLWC',
+            language: 'English',
+            originalLanguage: 'English',
+            isDuplicate: false,
+            migrationSuccess: true,
+          },
+        ],
+      ]),
+      osStandardStorage: new Map(),
+      fcStorage: new Map(),
+    };
+    sandbox.stub(StorageUtil, 'getOmnistudioMigrationStorage').returns(mockStorage);
+
+    const bundle: Flexipage = {
+      flexiPageRegions: [
+        makeRegion([
+          makeItemInstance([
+            { name: 'target', value: 'type:subtype' },
+            { name: 'prefill', value: '{"AccountId":"{!recordId}"}' },
+            { name: 'layout', value: 'lightning' },
+          ]),
+        ]),
+      ],
+    };
+    const result = transformFlexipageBundle(bundle, namespace, 'migrate');
+    expect(result).to.not.equal(false);
+    const changed = result as Flexipage;
+    const item = changed.flexiPageRegions[0].itemInstances[0];
+
+    expect(item.componentInstance.componentName).to.equal(targetComponentNameOS);
+    // Verify prefill is passed through
+    const prefillProp = item.componentInstance.componentInstanceProperties.find((p) => p.name === 'prefill');
+    expect(prefillProp).to.exist;
+    expect(prefillProp.value).to.equal('{"AccountId":"{!recordId}"}');
+  });
+
+  it('passes through recordId property when present in source OmniScript component', () => {
+    // Mock StorageUtil
+    const mockStorage = {
+      osStorage: new Map([
+        [
+          'subtype',
+          {
+            type: 'OSForCustomLWC',
+            originalType: 'OSForCustomLWC',
+            subtype: 'OSForCustomLWC',
+            originalSubtype: 'OSForCustomLWC',
+            language: 'English',
+            originalLanguage: 'English',
+            isDuplicate: false,
+            migrationSuccess: true,
+          },
+        ],
+      ]),
+      osStandardStorage: new Map(),
+      fcStorage: new Map(),
+    };
+    sandbox.stub(StorageUtil, 'getOmnistudioMigrationStorage').returns(mockStorage);
+
+    const bundle: Flexipage = {
+      flexiPageRegions: [
+        makeRegion([
+          makeItemInstance([
+            { name: 'target', value: 'type:subtype' },
+            { name: 'recordId', value: '{!recordId}' },
+            { name: 'layout', value: 'lightning' },
+          ]),
+        ]),
+      ],
+    };
+    const result = transformFlexipageBundle(bundle, namespace, 'migrate');
+    expect(result).to.not.equal(false);
+    const changed = result as Flexipage;
+    const item = changed.flexiPageRegions[0].itemInstances[0];
+
+    expect(item.componentInstance.componentName).to.equal(targetComponentNameOS);
+    // Verify recordId is passed through
+    const recordIdProp = item.componentInstance.componentInstanceProperties.find((p) => p.name === 'recordId');
+    expect(recordIdProp).to.exist;
+    expect(recordIdProp.value).to.equal('{!recordId}');
+  });
+
+  it('does not include prefill property when not present in source component', () => {
+    // Mock StorageUtil
+    const mockStorage = {
+      osStorage: new Map([
+        [
+          'subtype',
+          {
+            type: 'OSForCustomLWC',
+            originalType: 'OSForCustomLWC',
+            subtype: 'OSForCustomLWC',
+            originalSubtype: 'OSForCustomLWC',
+            language: 'English',
+            originalLanguage: 'English',
+            isDuplicate: false,
+            migrationSuccess: true,
+          },
+        ],
+      ]),
+      osStandardStorage: new Map(),
+      fcStorage: new Map(),
+    };
+    sandbox.stub(StorageUtil, 'getOmnistudioMigrationStorage').returns(mockStorage);
+
+    const bundle: Flexipage = {
+      flexiPageRegions: [
+        makeRegion([
+          makeItemInstance([
+            { name: 'target', value: 'type:subtype' },
+            { name: 'layout', value: 'lightning' },
+          ]),
+        ]),
+      ],
+    };
+    const result = transformFlexipageBundle(bundle, namespace, 'migrate');
+    expect(result).to.not.equal(false);
+    const changed = result as Flexipage;
+    const item = changed.flexiPageRegions[0].itemInstances[0];
+
+    // Verify prefill is NOT present when not in source
+    const prefillProp = item.componentInstance.componentInstanceProperties.find((p) => p.name === 'prefill');
+    expect(prefillProp).to.be.undefined;
+  });
+
+  it('passes through prefill property in assess mode', () => {
+    // Mock StorageUtil for assess mode
+    const mockStorage = {
+      osStorage: new Map([
+        [
+          'subtype',
+          {
+            type: 'OSForCustomLWC',
+            originalType: 'OSForCustomLWC',
+            subtype: 'OSForCustomLWC',
+            originalSubtype: 'OSForCustomLWC',
+            language: 'English',
+            originalLanguage: 'English',
+            isDuplicate: false,
+            migrationSuccess: true,
+          },
+        ],
+      ]),
+      osStandardStorage: new Map(),
+      fcStorage: new Map(),
+    };
+    sandbox.stub(StorageUtil, 'getOmnistudioAssessmentStorage').returns(mockStorage);
+
+    const bundle: Flexipage = {
+      flexiPageRegions: [
+        makeRegion([
+          makeItemInstance([
+            { name: 'target', value: 'type:subtype' },
+            { name: 'prefill', value: '{"CaseId":"{!caseId}"}' },
+            { name: 'layout', value: 'lightning' },
+          ]),
+        ]),
+      ],
+    };
+    const result = transformFlexipageBundle(bundle, namespace, 'assess');
+    expect(result).to.not.equal(false);
+    const changed = result as Flexipage;
+    const item = changed.flexiPageRegions[0].itemInstances[0];
+
+    expect(item.componentInstance.componentName).to.equal(targetComponentNameOS);
+    // Verify prefill is passed through in assess mode
+    const prefillProp = item.componentInstance.componentInstanceProperties.find((p) => p.name === 'prefill');
+    expect(prefillProp).to.exist;
+    expect(prefillProp.value).to.equal('{"CaseId":"{!caseId}"}');
+  });
+
+  it('passes through recordId and objectApiName for FlexCard components', () => {
+    // Mock StorageUtil
+    const mockStorage = {
+      osStorage: new Map(),
+      osStandardStorage: new Map(),
+      fcStorage: new Map([
+        ['testcard', { name: 'TestCard', originalName: 'TestCard', isDuplicate: false, migrationSuccess: true }],
+      ]),
+    };
+    sandbox.stub(StorageUtil, 'getOmnistudioMigrationStorage').returns(mockStorage);
+
+    const bundle: Flexipage = {
+      flexiPageRegions: [
+        makeRegion([
+          makeItemInstance([
+            { name: 'target', value: 'type:cfTestCard' },
+            { name: 'recordId', value: '{!recordId}' },
+            { name: 'objectApiName', value: 'Account' },
+          ]),
+        ]),
+      ],
+    };
+    const result = transformFlexipageBundle(bundle, namespace, 'migrate');
+    expect(result).to.not.equal(false);
+    const changed = result as Flexipage;
+    const item = changed.flexiPageRegions[0].itemInstances[0];
+
+    expect(item.componentInstance.componentName).to.equal(targetComponentNameFC);
+    // Verify passthrough props
+    const recordIdProp = item.componentInstance.componentInstanceProperties.find((p) => p.name === 'recordId');
+    expect(recordIdProp).to.exist;
+    expect(recordIdProp.value).to.equal('{!recordId}');
+    const objectApiNameProp = item.componentInstance.componentInstanceProperties.find(
+      (p) => p.name === 'objectApiName'
+    );
+    expect(objectApiNameProp).to.exist;
+    expect(objectApiNameProp.value).to.equal('Account');
   });
 
   it('returns false if no matching component', () => {
@@ -223,13 +443,13 @@ describe('transformFlexipageBundle', () => {
 
     // Check sequential IDs
     expect(changed.flexiPageRegions[0].itemInstances[0].componentInstance.identifier).to.equal(
-      'lightning_omnistudioOmniscript1'
+      'runtime_omnistudio_omniscript1'
     );
     expect(changed.flexiPageRegions[0].itemInstances[1].componentInstance.identifier).to.equal(
-      'lightning_omnistudioOmniscript2'
+      'runtime_omnistudio_omniscript2'
     );
     expect(changed.flexiPageRegions[0].itemInstances[2].componentInstance.identifier).to.equal(
-      'lightning_omnistudioOmniscript3'
+      'runtime_omnistudio_omniscript3'
     );
   });
 
@@ -277,13 +497,13 @@ describe('transformFlexipageBundle', () => {
 
     // Check sequential IDs for FlexCards
     expect(changed.flexiPageRegions[0].itemInstances[0].componentInstance.identifier).to.equal(
-      'lightning_omnistudioFlexcard1'
+      'runtime_omnistudio_flexcard1'
     );
     expect(changed.flexiPageRegions[0].itemInstances[1].componentInstance.identifier).to.equal(
-      'lightning_omnistudioFlexcard2'
+      'runtime_omnistudio_flexcard2'
     );
     expect(changed.flexiPageRegions[0].itemInstances[2].componentInstance.identifier).to.equal(
-      'lightning_omnistudioFlexcard3'
+      'runtime_omnistudio_flexcard3'
     );
   });
 
@@ -342,16 +562,16 @@ describe('transformFlexipageBundle', () => {
 
     // Check sequential IDs for mixed components
     expect(changed.flexiPageRegions[0].itemInstances[0].componentInstance.identifier).to.equal(
-      'lightning_omnistudioOmniscript1'
+      'runtime_omnistudio_omniscript1'
     );
     expect(changed.flexiPageRegions[0].itemInstances[1].componentInstance.identifier).to.equal(
-      'lightning_omnistudioFlexcard1'
+      'runtime_omnistudio_flexcard1'
     );
     expect(changed.flexiPageRegions[0].itemInstances[2].componentInstance.identifier).to.equal(
-      'lightning_omnistudioOmniscript2'
+      'runtime_omnistudio_omniscript2'
     );
     expect(changed.flexiPageRegions[0].itemInstances[3].componentInstance.identifier).to.equal(
-      'lightning_omnistudioFlexcard2'
+      'runtime_omnistudio_flexcard2'
     );
   });
 
@@ -422,16 +642,16 @@ describe('transformFlexipageBundle', () => {
 
     // Check that sequence counters reset for second page
     expect(changed1.flexiPageRegions[0].itemInstances[0].componentInstance.identifier).to.equal(
-      'lightning_omnistudioOmniscript1'
+      'runtime_omnistudio_omniscript1'
     );
     expect(changed1.flexiPageRegions[0].itemInstances[1].componentInstance.identifier).to.equal(
-      'lightning_omnistudioFlexcard1'
+      'runtime_omnistudio_flexcard1'
     );
     expect(changed2.flexiPageRegions[0].itemInstances[0].componentInstance.identifier).to.equal(
-      'lightning_omnistudioOmniscript1'
+      'runtime_omnistudio_omniscript1'
     );
     expect(changed2.flexiPageRegions[0].itemInstances[1].componentInstance.identifier).to.equal(
-      'lightning_omnistudioFlexcard1'
+      'runtime_omnistudio_flexcard1'
     );
   });
 
@@ -485,10 +705,10 @@ describe('transformFlexipageBundle', () => {
 
     // All should be transformed to lowercase and find the correct storage entries
     expect(changed.flexiPageRegions[0].itemInstances[0].componentInstance.componentName).to.equal(
-      lightningTargetComponentNameOS
+      targetComponentNameOS
     );
     expect(changed.flexiPageRegions[0].itemInstances[1].componentInstance.componentName).to.equal(
-      lightningTargetComponentNameOS
+      targetComponentNameOS
     );
   });
 
@@ -524,10 +744,10 @@ describe('transformFlexipageBundle', () => {
 
     // All should be transformed to lowercase and find the correct storage entries
     expect(changed.flexiPageRegions[0].itemInstances[0].componentInstance.componentName).to.equal(
-      lightningTargetComponentNameFC
+      targetComponentNameFC
     );
     expect(changed.flexiPageRegions[0].itemInstances[1].componentInstance.componentName).to.equal(
-      lightningTargetComponentNameFC
+      targetComponentNameFC
     );
   });
 
@@ -562,7 +782,7 @@ describe('transformFlexipageBundle', () => {
     const changed = result as Flexipage;
 
     expect(changed.flexiPageRegions[0].itemInstances[0].componentInstance.componentName).to.equal(
-      lightningTargetComponentNameOS
+      targetComponentNameOS
     );
   });
 
@@ -588,7 +808,7 @@ describe('transformFlexipageBundle', () => {
     const changed = result as Flexipage;
 
     expect(changed.flexiPageRegions[0].itemInstances[0].componentInstance.componentName).to.equal(
-      lightningTargetComponentNameFC
+      targetComponentNameFC
     );
   });
 
@@ -699,8 +919,8 @@ describe('transformFlexipageBundle', () => {
   });
 
   describe('Standard Data Model Tests', () => {
-    const targetComponentNameOS = 'runtime_omnistudio:omniscript';
-    const targetComponentNameFlexCard = 'runtime_omnistudio:flexcard';
+    const standardComponentNameOS = 'runtime_omnistudio:omniscript';
+    const standardComponentNameFC = 'runtime_omnistudio:flexcard';
 
     function makeStandardOmniScriptComponent(type: string, subType: string, language: string): FlexiItemInstance {
       return makeItemInstance(
@@ -709,12 +929,12 @@ describe('transformFlexipageBundle', () => {
           { name: 'subType', value: subType },
           { name: 'language', value: language },
         ],
-        targetComponentNameOS
+        standardComponentNameOS
       );
     }
 
     function makeStandardFlexCardComponent(flexcardName: string): FlexiItemInstance {
-      return makeItemInstance([{ name: 'flexcardName', value: flexcardName }], targetComponentNameFlexCard);
+      return makeItemInstance([{ name: 'flexcardName', value: flexcardName }], standardComponentNameFC);
     }
 
     it('transforms standard data model OmniScript components successfully', () => {
@@ -821,7 +1041,7 @@ describe('transformFlexipageBundle', () => {
                 { name: 'language', value: 'English' },
                 // Missing 'type' attribute
               ],
-              targetComponentNameOS
+              standardComponentNameOS
             ),
           ]),
         ],
@@ -850,7 +1070,7 @@ describe('transformFlexipageBundle', () => {
               [
                 // Missing 'flexcardName' attribute
               ],
-              targetComponentNameFlexCard
+              standardComponentNameFC
             ),
           ]),
         ],

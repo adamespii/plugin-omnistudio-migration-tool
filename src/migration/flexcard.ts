@@ -716,8 +716,13 @@ export class CardMigrationTool extends BaseMigrationTool implements MigrationToo
       stateAction.message.trim().length > 0 &&
       (stateAction.type === Constants.DataAction || stateAction.type === Constants.CardAction)
     ) {
+      const trimmedMessage = stateAction.message.trim();
+      // Only attempt JSON parse if the message looks like a JSON object or array
+      if (!trimmedMessage.startsWith('{') && !trimmedMessage.startsWith('[')) {
+        return;
+      }
       try {
-        const messageObj = JSON.parse(stateAction.message);
+        const messageObj = JSON.parse(trimmedMessage);
         if (messageObj.value) {
           // DataRaptor bundle
           if (messageObj.value.bundle) {
@@ -747,8 +752,13 @@ export class CardMigrationTool extends BaseMigrationTool implements MigrationToo
       stateAction.message.trim().length > 0 &&
       (stateAction.type === Constants.DataAction || stateAction.type === Constants.CardAction)
     ) {
+      const trimmedMessage = stateAction.message.trim();
+      // Only attempt JSON parse if the message looks like a JSON object or array
+      if (!trimmedMessage.startsWith('{') && !trimmedMessage.startsWith('[')) {
+        return;
+      }
       try {
-        const messageObj = JSON.parse(stateAction.message);
+        const messageObj = JSON.parse(trimmedMessage);
         let messageUpdated = false;
 
         if (messageObj.value) {

@@ -30,7 +30,7 @@ const TARGET_COMPONENT_NAME_FC = 'runtime_omnistudio:flexcard';
 const TARGET_COMPONENT_NAME_OS_EXP = 'runtime_omnistudio:omniscriptExperienceCloud';
 const FLEXCARD_PREFIX = 'cf';
 
-/** Lightning wrappers (introduced in 260) */
+/** Lightning wrapper component names (for detection in standard data model orgs that already have them) */
 const LIGHTNING_TARGET_COMPONENT_NAME_OS = 'lightning:omnistudioOmniscript';
 const LIGHTNING_TARGET_COMPONENT_NAME_FC = 'lightning:omnistudioFlexcard';
 
@@ -332,14 +332,12 @@ export class ExperienceSiteMigration extends BaseRelatedObjectMigration {
 
     Logger.logVerbose(this.messages.getMessage('targetData', [JSON.stringify(targetDataFromStorageFC)]));
 
-    // Remove later
     if (this.shouldAddWarning(targetDataFromStorageFC)) {
       const warningMsg: string = this.getWarningMessage(flexcardName, targetDataFromStorageFC);
       experienceSiteAssessmentInfo.warnings.push(warningMsg);
       experienceSiteAssessmentInfo.status = type === this.ASSESS ? 'Needs manual intervention' : 'Skipped';
     } else {
-      // Use Lightning wrappers (introduced in 260)
-      component.componentName = LIGHTNING_TARGET_COMPONENT_NAME_FC;
+      component.componentName = TARGET_COMPONENT_NAME_FC;
 
       const keysToDelete = ['target', 'layout', 'params', 'standalone'];
 
@@ -369,11 +367,12 @@ export class ExperienceSiteMigration extends BaseRelatedObjectMigration {
       experienceSiteAssessmentInfo.warnings.push(warningMsg);
       experienceSiteAssessmentInfo.status = type === this.ASSESS ? 'Needs manual intervention' : 'Skipped';
     } else {
-      // Use Lightning wrappers (introduced in 260)
-      component.componentName = LIGHTNING_TARGET_COMPONENT_NAME_OS;
+      component.componentName = TARGET_COMPONENT_NAME_OS;
 
-      // Preserve the layout value before clearing
+      // Preserve the layout value and prefill before clearing
       const originalLayout = currentAttribute['layout'];
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const originalPrefill = currentAttribute['prefill'];
 
       // Clear existing properties more safely - preserve any properties we don't want to delete
       const keysToDelete = ['layout', 'params', 'standAlone', 'target'];
@@ -387,6 +386,12 @@ export class ExperienceSiteMigration extends BaseRelatedObjectMigration {
       currentAttribute['subType'] = targetDataFromStorage.subtype;
       currentAttribute['theme'] = originalLayout;
       currentAttribute['type'] = targetDataFromStorage.type;
+
+      // Pass through prefill if present (supported since release 264 / API 68+)
+      if (originalPrefill) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        currentAttribute['prefill'] = originalPrefill;
+      }
     }
   }
 

@@ -252,5 +252,7 @@
   "noOmniscriptFoundForOsInstance": "No Omniscript found for OmniscriptInstance \"%s\"",
   "omniscriptNeedsToBeMigrated": "Omniscript \"%s\" needs to be migrated.",
   "errorDuringSaveForLaterAssessment": "Errors occurred during the Save for Later assessment:",
-  "prePostHookAutoEnabled": "PreHook/PostHook will be auto-enabled on Remote Action step(s): %s. A hook implementation is registered for the remote class used by these steps."
+  "prePostHookAutoEnabled": "PreHook/PostHook will be auto-enabled on Remote Action step(s): %s. A hook implementation is registered for the remote class used by these steps.",
+  "flexipageOsWrapperSummary": "%s OmniScript component%s will migrate from vlocityLWCOmniWrapper to runtime_omnistudio:omniscript",
+  "flexipageFcWrapperSummary": "%s FlexCard component%s will migrate from vlocityLWCOmniWrapper to runtime_omnistudio:flexcard"
 }

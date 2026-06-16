@@ -298,7 +298,7 @@ describe('ExperienceSiteMigration', () => {
       const parsedContent = JSON.parse(writtenContent) as ExpSitePageJson;
       const component = parsedContent.regions[1].components[0];
 
-      expect(component.componentName).to.equal('lightning:omnistudioOmniscript');
+      expect(component.componentName).to.equal('runtime_omnistudio:omniscript');
       expect(component.componentAttributes.type).to.equal('TestType');
       expect(component.componentAttributes.subType).to.equal('TestSubtype');
       expect(component.componentAttributes.language).to.equal('English');
@@ -493,6 +493,119 @@ describe('ExperienceSiteMigration', () => {
       const component = parsedContent.regions[1].components[0];
 
       expect(component.componentAttributes.theme).to.equal('customLayout');
+    });
+
+    it('should pass through prefill attribute when present in source component', () => {
+      // Arrange
+      const mockStorage: MigrationStorage = {
+        osStorage: new Map<string, OmniScriptStorage>(),
+        osStandardStorage: new Map<string, OmniScriptStorage>(),
+        fcStorage: new Map(),
+      };
+
+      const mockOSStorage: OmniScriptStorage = {
+        type: 'TestType',
+        originalType: 'TestType',
+        subtype: 'TestSubtype',
+        originalSubtype: 'TestSubtype',
+        language: 'English',
+        originalLanguage: 'English',
+        isDuplicate: false,
+        migrationSuccess: true,
+      };
+
+      mockStorage.osStorage.set('testsubtype:english', mockOSStorage);
+      storageUtilStub.returns(mockStorage);
+
+      const siteWithPrefill = JSON.parse(JSON.stringify(sampleExperienceSiteJson)) as ExpSitePageJson;
+      siteWithPrefill.regions[1].components[0].componentAttributes.prefill = '{"AccountId":"{!recordId}"}';
+      fsReadStub.returns(JSON.stringify(siteWithPrefill));
+
+      // Act
+      experienceSiteMigration.processExperienceSite(mockFile, 'Migrate');
+
+      // Assert
+      const writtenContent = fsWriteStub.firstCall.args[1];
+      const parsedContent = JSON.parse(writtenContent) as ExpSitePageJson;
+      const component = parsedContent.regions[1].components[0];
+
+      expect(component.componentName).to.equal('runtime_omnistudio:omniscript');
+      expect(component.componentAttributes.prefill).to.equal('{"AccountId":"{!recordId}"}');
+      expect(component.componentAttributes.type).to.equal('TestType');
+      expect(component.componentAttributes.subType).to.equal('TestSubtype');
+      expect(component.componentAttributes.language).to.equal('English');
+    });
+
+    it('should not include prefill attribute when not present in source component', () => {
+      // Arrange
+      const mockStorage: MigrationStorage = {
+        osStorage: new Map<string, OmniScriptStorage>(),
+        osStandardStorage: new Map<string, OmniScriptStorage>(),
+        fcStorage: new Map(),
+      };
+
+      const mockOSStorage: OmniScriptStorage = {
+        type: 'TestType',
+        originalType: 'TestType',
+        subtype: 'TestSubtype',
+        originalSubtype: 'TestSubtype',
+        language: 'English',
+        originalLanguage: 'English',
+        isDuplicate: false,
+        migrationSuccess: true,
+      };
+
+      mockStorage.osStorage.set('testsubtype:english', mockOSStorage);
+      storageUtilStub.returns(mockStorage);
+      fsReadStub.returns(JSON.stringify(sampleExperienceSiteJson));
+
+      // Act
+      experienceSiteMigration.processExperienceSite(mockFile, 'Migrate');
+
+      // Assert
+      const writtenContent = fsWriteStub.firstCall.args[1];
+      const parsedContent = JSON.parse(writtenContent) as ExpSitePageJson;
+      const component = parsedContent.regions[1].components[0];
+
+      expect(component.componentName).to.equal('runtime_omnistudio:omniscript');
+      expect(component.componentAttributes.prefill).to.be.undefined;
+    });
+
+    it('should migrate FlexCard to runtime_omnistudio:flexcard with recordId and objectApiName', () => {
+      // Arrange
+      const mockStorage: MigrationStorage = {
+        osStorage: new Map<string, OmniScriptStorage>(),
+        osStandardStorage: new Map<string, OmniScriptStorage>(),
+        fcStorage: new Map(),
+      };
+
+      mockStorage.fcStorage.set('testcard', {
+        name: 'TestCard',
+        originalName: 'TestCard',
+        isDuplicate: false,
+        migrationSuccess: true,
+      });
+      storageUtilStub.returns(mockStorage);
+
+      const siteWithFlexCard = JSON.parse(JSON.stringify(sampleExperienceSiteJson)) as ExpSitePageJson;
+      siteWithFlexCard.regions[1].components[0].componentAttributes.target = 'c:cfTestCard';
+      fsReadStub.returns(JSON.stringify(siteWithFlexCard));
+
+      // Act
+      experienceSiteMigration.processExperienceSite(mockFile, 'Migrate');
+
+      // Assert
+      const writtenContent = fsWriteStub.firstCall.args[1];
+      const parsedContent = JSON.parse(writtenContent) as ExpSitePageJson;
+      const component = parsedContent.regions[1].components[0];
+
+      expect(component.componentName).to.equal('runtime_omnistudio:flexcard');
+      expect(component.componentAttributes.flexcardName).to.equal('TestCard');
+      expect(component.componentAttributes.recordId).to.equal('{!recordId}');
+      expect(component.componentAttributes.objectApiName).to.equal('{!objectApiName}');
+      // Old attributes should be removed
+      expect(component.componentAttributes.target).to.be.undefined;
+      expect(component.componentAttributes.layout).to.be.undefined;
     });
   });
 

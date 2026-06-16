@@ -51,7 +51,7 @@ export class FlexipageAssessmentReporter {
       title: 'FlexiPages Assessment Report',
       heading: 'FlexiPages Assessment Report',
       description:
-        'FlexiPages containing the legacy vlocityLWCOmniWrapper component will be converted to use the Lightning OmniStudio wrappers (lightning:omnistudioOmniscript / lightning:omnistudioFlexcard) post migration.',
+        'FlexiPages containing the legacy vlocityLWCOmniWrapper component will be converted to use runtime_omnistudio:omniscript / runtime_omnistudio:flexcard post migration.',
       org: getOrgDetailsForReport(omnistudioOrgDetails),
       assessmentDate: new Date().toLocaleString(),
       total: flexipageAssessmentInfos?.length || 0,
@@ -149,13 +149,13 @@ export class FlexipageAssessmentReporter {
         ),
         createRowDataParam(
           'errors',
-          flexipageAssessmentInfo.errors?.length > 0 ? 'Errors' : 'No Errors',
+          flexipageAssessmentInfo.errors?.length > 0 ? 'Errors' : flexipageAssessmentInfo.summary?.length > 0 ? '' : '',
           false,
           1,
           1,
           false,
           undefined,
-          flexipageAssessmentInfo.errors
+          [...(flexipageAssessmentInfo.summary || []), ...(flexipageAssessmentInfo.errors || [])]
         ),
       ],
       rowId: `${this.rowIdPrefix}${this.rowId++}`,

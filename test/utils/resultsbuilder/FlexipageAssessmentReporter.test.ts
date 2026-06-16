@@ -215,7 +215,7 @@ describe('FlexipageAssessmentReporter', () => {
       expect(result[0].data[2].value).to.equal('Ready for migration');
       expect(result[0].data[2].customClass).to.equal('text-success');
       expect(result[0].data[3].value).to.equal('');
-      expect(result[0].data[4].value).to.equal('No Errors');
+      expect(result[0].data[4].value).to.equal('');
 
       // Check second row
       expect(result[1].data[0].value).to.equal('TestPage2');

@@ -24,19 +24,19 @@ import { isStandardDataModel } from '../dataModelService';
 /** Component name to look for during transformation */
 const lookupComponentName = 'vlocityLWCOmniWrapper';
 
-/** Legacy runtime wrapper component names (used for detection in standard data model) */
+/** Target component name after transformation */
 const targetComponentNameOS = 'runtime_omnistudio:omniscript';
+/** Target identifier after transformation */
+const targetIdentifierOS = 'runtime_omnistudio_omniscript';
+
+/** Target component name - FlexCard */
 const targetComponentNameFlexCard = 'runtime_omnistudio:flexcard';
+/** Target identifier - FlexCard */
+const targetIdentifierFlexCard = 'runtime_omnistudio_flexcard';
 
-/** Target component name - Lightning OmniScript wrapper (introduced in 260) */
+/** Lightning wrapper component names (used for detection in standard data model only) */
 const lightningTargetComponentNameOS = 'lightning:omnistudioOmniscript';
-/** Target identifier - Lightning OmniScript wrapper */
-const lightningTargetIdentifierOS = 'lightning_omnistudioOmniscript';
-
-/** Target component name - Lightning FlexCard wrapper (introduced in 260) */
 const lightningTargetComponentNameFlexCard = 'lightning:omnistudioFlexcard';
-/** Target identifier - Lightning FlexCard wrapper */
-const lightningTargetIdentifierFlexCard = 'lightning_omnistudioFlexcard';
 
 let osSeq = 1;
 let fcSeq = 1;
@@ -219,7 +219,8 @@ function createNewPropsForOmniScript(
     direction: 'ltr',
   };
 
-  // Pass through additional properties supported by the lightning wrapper
+  // Pass through prefill and recordId if present in the source component
+  // (runtime_omnistudio:omniscript supports prefill since release 264 / API 68+)
   const passthroughPropsOS = ['prefill', 'recordId'];
   for (const propName of passthroughPropsOS) {
     const existingProp = componentInstanceProperties.find((prop) => prop.name === propName);
@@ -229,8 +230,8 @@ function createNewPropsForOmniScript(
   }
 
   return {
-    componentName: lightningTargetComponentNameOS,
-    identifier: `${lightningTargetIdentifierOS}${osSeq++}`,
+    componentName: targetComponentNameOS,
+    identifier: `${targetIdentifierOS}${osSeq++}`,
     props: newProps,
   };
 }
@@ -264,7 +265,7 @@ function createNewPropsForFlexCard(
     flexcardName: migratedCardName.name,
   };
 
-  // Pass through additional properties supported by the lightning wrapper
+  // Pass through recordId and objectApiName if present in the source component
   if (componentInstanceProperties) {
     const passthroughPropsFC = ['recordId', 'objectApiName'];
     for (const propName of passthroughPropsFC) {
@@ -276,8 +277,8 @@ function createNewPropsForFlexCard(
   }
 
   return {
-    componentName: lightningTargetComponentNameFlexCard,
-    identifier: `${lightningTargetIdentifierFlexCard}${fcSeq++}`,
+    componentName: targetComponentNameFlexCard,
+    identifier: `${targetIdentifierFlexCard}${fcSeq++}`,
     props: newProps,
   };
 }
