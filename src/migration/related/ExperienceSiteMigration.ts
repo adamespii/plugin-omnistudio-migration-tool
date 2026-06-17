@@ -30,10 +30,6 @@ const TARGET_COMPONENT_NAME_FC = 'runtime_omnistudio:flexcard';
 const TARGET_COMPONENT_NAME_OS_EXP = 'runtime_omnistudio:omniscriptExperienceCloud';
 const FLEXCARD_PREFIX = 'cf';
 
-/** Lightning wrapper component names (for detection in standard data model orgs that already have them) */
-const LIGHTNING_TARGET_COMPONENT_NAME_OS = 'lightning:omnistudioOmniscript';
-const LIGHTNING_TARGET_COMPONENT_NAME_FC = 'lightning:omnistudioFlexcard';
-
 export class ExperienceSiteMigration extends BaseRelatedObjectMigration {
   private EXPERIENCE_SITES_PATH: string;
   private MIGRATE = 'Migrate';
@@ -400,15 +396,13 @@ export class ExperienceSiteMigration extends BaseRelatedObjectMigration {
   }
 
   /**
-   * Check if component is an Omnistudio LWC component (runtime or Lightning wrappers)
+   * Check if component is an Omnistudio LWC component (runtime wrappers)
    */
   private isOmnistudioStandardWrapper(componentName: string): boolean {
     return (
       componentName === TARGET_COMPONENT_NAME_OS ||
       componentName === TARGET_COMPONENT_NAME_FC ||
-      componentName === TARGET_COMPONENT_NAME_OS_EXP ||
-      componentName === LIGHTNING_TARGET_COMPONENT_NAME_OS ||
-      componentName === LIGHTNING_TARGET_COMPONENT_NAME_FC
+      componentName === TARGET_COMPONENT_NAME_OS_EXP
     );
   }
 
@@ -427,13 +421,9 @@ export class ExperienceSiteMigration extends BaseRelatedObjectMigration {
     const componentName = component.componentName;
     const attributes = component.componentAttributes;
 
-    if (
-      componentName === TARGET_COMPONENT_NAME_OS ||
-      componentName === TARGET_COMPONENT_NAME_OS_EXP ||
-      componentName === LIGHTNING_TARGET_COMPONENT_NAME_OS
-    ) {
+    if (componentName === TARGET_COMPONENT_NAME_OS || componentName === TARGET_COMPONENT_NAME_OS_EXP) {
       this.updateOmniScriptComponentReferences(attributes, experienceSiteAssessmentInfo, storage, type);
-    } else if (componentName === TARGET_COMPONENT_NAME_FC || componentName === LIGHTNING_TARGET_COMPONENT_NAME_FC) {
+    } else if (componentName === TARGET_COMPONENT_NAME_FC) {
       this.updateFlexCardComponentReferences(attributes, experienceSiteAssessmentInfo, storage, type);
     }
   }
