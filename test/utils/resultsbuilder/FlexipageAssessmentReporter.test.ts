@@ -190,7 +190,7 @@ describe('FlexipageAssessmentReporter', () => {
           path: '/test/path1',
           diff: 'mock-diff-1',
           errors: [],
-          summary: ['1 OmniScript component will migrate from vlocityLWCOmniWrapper to runtime_omnistudio:omniscript'],
+          summary: ['OmniScript component will migrate from vlocityLWCOmniWrapper to runtime_omnistudio:omniscript'],
           status: 'Ready for migration',
         },
         {
@@ -219,7 +219,7 @@ describe('FlexipageAssessmentReporter', () => {
       // Summary column: no "Errors" label, but title contains the summary text
       expect(result[0].data[4].value).to.equal('');
       expect(result[0].data[4].title).to.deep.equal([
-        '1 OmniScript component will migrate from vlocityLWCOmniWrapper to runtime_omnistudio:omniscript',
+        'OmniScript component will migrate from vlocityLWCOmniWrapper to runtime_omnistudio:omniscript',
       ]);
 
       // Check second row - has errors, no summary

@@ -365,6 +365,6 @@
   "ossAttachmentUploadEnd": "Uploaded %s/%s attachments for %s",
   "ossAttachmentDownloadSuccess": "Successfully downloaded attachment %s, size: %s bytes",
   "ossAttachmentDownloadFailed": "Failed to download attachment from path %s : %s",
-  "flexipageOsWrapperSummary": "%s OmniScript component%s will migrate from vlocityLWCOmniWrapper to runtime_omnistudio:omniscript",
-  "flexipageFcWrapperSummary": "%s FlexCard component%s will migrate from vlocityLWCOmniWrapper to runtime_omnistudio:flexcard"
+  "flexipageOsWrapperSummary": "OmniScript component will migrate from vlocityLWCOmniWrapper to runtime_omnistudio:omniscript",
+  "flexipageFcWrapperSummary": "FlexCard component will migrate from vlocityLWCOmniWrapper to runtime_omnistudio:flexcard"
 }

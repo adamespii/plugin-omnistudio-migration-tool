@@ -285,10 +285,10 @@ export class FlexipageMigration extends BaseRelatedObjectMigration {
     }
 
     if (osCount > 0) {
-      summary.push(this.messages.getMessage('flexipageOsWrapperSummary', [osCount, osCount > 1 ? 's' : '']));
+      summary.push(this.messages.getMessage('flexipageOsWrapperSummary'));
     }
     if (fcCount > 0) {
-      summary.push(this.messages.getMessage('flexipageFcWrapperSummary', [fcCount, fcCount > 1 ? 's' : '']));
+      summary.push(this.messages.getMessage('flexipageFcWrapperSummary'));
     }
 
     return summary;
