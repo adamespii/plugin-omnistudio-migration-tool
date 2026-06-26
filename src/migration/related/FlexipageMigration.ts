@@ -116,8 +116,20 @@ export class FlexipageMigration extends BaseRelatedObjectMigration {
     for (const file of files) {
       Logger.logVerbose(this.messages.getMessage('processingFlexiPage', [file]));
       const filePath = path.join(flexiPageDir, file);
+      let summary: string[] = [];
       try {
-        const flexPageAssessmentInfo: FlexiPageAssessmentInfo = this.processFlexiPage(file, filePath, mode);
+        const fileContent = fs.readFileSync(filePath, 'utf8');
+        const json = this.xmlUtil.parse(fileContent) as Flexipage;
+        summary = this.buildConversionSummary(json);
+
+        const flexPageAssessmentInfo: FlexiPageAssessmentInfo = this.processFlexiPage(
+          file,
+          filePath,
+          mode,
+          json,
+          fileContent,
+          summary
+        );
         if (!flexPageAssessmentInfo) {
           progressBar.increment();
           continue;
@@ -151,6 +163,7 @@ export class FlexipageMigration extends BaseRelatedObjectMigration {
           errors: [error instanceof Error ? error.message : JSON.stringify(error)],
           path: filePath,
           diff: '',
+          summary,
           status,
         });
       }
@@ -181,12 +194,27 @@ export class FlexipageMigration extends BaseRelatedObjectMigration {
    * @param mode - The processing mode: 'assess' or 'migrate'
    * @returns FlexiPage assessment information with status and error details
    */
-  private processFlexiPage(fileName: string, filePath: string, mode: 'assess' | 'migrate'): FlexiPageAssessmentInfo {
+  /**
+   * Process a single FlexiPage for assessment or migration.
+   *
+   * @param fileName - The FlexiPage file name
+   * @param filePath - Full path to the FlexiPage file
+   * @param mode - 'assess' or 'migrate'
+   * @param json - Pre-parsed XML object (avoids re-parsing inside this method)
+   * @param fileContent - Raw XML string (used for generating diff between original and transformed)
+   * @param summary - Conversion summary lines (e.g. "1 OmniScript will migrate to runtime_omnistudio:omniscript")
+   */
+  private processFlexiPage(
+    fileName: string,
+    filePath: string,
+    mode: 'assess' | 'migrate',
+    json: Flexipage,
+    fileContent: string,
+    summary: string[]
+  ): FlexiPageAssessmentInfo {
     Logger.logVerbose(this.messages.getMessage('startingFlexiPageProcessing', [fileName]));
-    const fileContent = fs.readFileSync(filePath, 'utf8');
     Logger.logVerbose(this.messages.getMessage('readFlexiPageContent', [fileContent.length]));
 
-    const json = this.xmlUtil.parse(fileContent) as Flexipage;
     const transformedFlexiPage = transformFlexipageBundle(json, this.namespace, mode);
     if (transformedFlexiPage === false) {
       Logger.logVerbose(`No transformation needed on ${fileName}`);
@@ -221,7 +249,48 @@ export class FlexipageMigration extends BaseRelatedObjectMigration {
       name: fileName,
       diff: JSON.stringify(diff),
       errors: [],
+      summary,
       status,
     };
+  }
+
+  private buildConversionSummary(json: Flexipage): string[] {
+    const summary: string[] = [];
+    let osCount = 0;
+    let fcCount = 0;
+
+    const regions = Array.isArray(json.flexiPageRegions) ? json.flexiPageRegions : [];
+    for (const region of regions) {
+      if (!region.itemInstances) continue;
+      const items = Array.isArray(region.itemInstances) ? region.itemInstances : [region.itemInstances];
+      for (const item of items) {
+        const componentName = item?.componentInstance?.componentName;
+        if (
+          componentName?.split(':')[0] === this.namespace &&
+          componentName?.split(':')[1] === 'vlocityLWCOmniWrapper'
+        ) {
+          const target = item.componentInstance?.componentInstanceProperties?.find(
+            (prop) => prop.name === 'target'
+          )?.value;
+          if (target) {
+            const nameKey = target.split(':')[1] || '';
+            if (nameKey.startsWith('cf')) {
+              fcCount++;
+            } else {
+              osCount++;
+            }
+          }
+        }
+      }
+    }
+
+    if (osCount > 0) {
+      summary.push(this.messages.getMessage('flexipageOsWrapperSummary'));
+    }
+    if (fcCount > 0) {
+      summary.push(this.messages.getMessage('flexipageFcWrapperSummary'));
+    }
+
+    return summary;
   }
 }

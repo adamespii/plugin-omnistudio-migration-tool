@@ -23,16 +23,19 @@ import { isStandardDataModel } from '../dataModelService';
 
 /** Component name to look for during transformation */
 const lookupComponentName = 'vlocityLWCOmniWrapper';
+
 /** Target component name after transformation */
 const targetComponentNameOS = 'runtime_omnistudio:omniscript';
 /** Target identifier after transformation */
 const targetIdentifierOS = 'runtime_omnistudio_omniscript';
 
+/** Target component name - FlexCard */
+const targetComponentNameFlexCard = 'runtime_omnistudio:flexcard';
+/** Target identifier - FlexCard */
+const targetIdentifierFlexCard = 'runtime_omnistudio_flexcard';
+
 let osSeq = 1;
 let fcSeq = 1;
-
-const targetComponentNameFlexCard = 'runtime_omnistudio:flexcard';
-const targetIdentifierFlexCard = 'runtime_omnistudio_flexcard';
 
 const flexCardPrefix = 'cf';
 
@@ -93,7 +96,7 @@ export function transformFlexipageBundle(
         item.componentInstance.componentName = targetComponentName;
         item.componentInstance.identifier = targetIdentifier;
       }
-      // Handle standard data model components
+      // Handle standard data model components (runtime_omnistudio wrappers already on the page)
       else if (isStandardDataModel() && componentName === targetComponentNameOS) {
         const currentType = item.componentInstance?.componentInstanceProperties?.find(
           (prop) => prop.name === 'type'
@@ -160,7 +163,12 @@ function createNewProps(
   componentInstanceProperties: FlexiComponentInstanceProperty[]
 ): { componentName: string; identifier: string; props: Record<string, string> } {
   if (nameKey.startsWith(flexCardPrefix)) {
-    return createNewPropsForFlexCard(nameKey.substring(flexCardPrefix.length).toLowerCase(), namespace, mode);
+    return createNewPropsForFlexCard(
+      nameKey.substring(flexCardPrefix.length).toLowerCase(),
+      namespace,
+      mode,
+      componentInstanceProperties
+    );
   }
   return createNewPropsForOmniScript(nameKey.toLowerCase(), namespace, mode, componentInstanceProperties);
 }
@@ -190,7 +198,7 @@ function createNewPropsForOmniScript(
     throw new DuplicateKeyError(nameKey, 'Omniscript');
   }
 
-  const newProps = {
+  const newProps: Record<string, string> = {
     language: migratedScriptName.language || 'English',
     subType: migratedScriptName.subtype,
     type: migratedScriptName.type,
@@ -200,6 +208,16 @@ function createNewPropsForOmniScript(
     display: 'Display OmniScript on page',
     direction: 'ltr',
   };
+
+  // Pass through prefill and recordId if present in the source component
+  // (runtime_omnistudio:omniscript supports prefill since release 264 / API 68+)
+  const passthroughPropsOS = ['prefill', 'recordId'];
+  for (const propName of passthroughPropsOS) {
+    const existingProp = componentInstanceProperties.find((prop) => prop.name === propName);
+    if (existingProp?.value) {
+      newProps[propName] = existingProp.value;
+    }
+  }
 
   return {
     componentName: targetComponentNameOS,
@@ -211,7 +229,8 @@ function createNewPropsForOmniScript(
 function createNewPropsForFlexCard(
   nameKey: string,
   namespace: string,
-  mode: 'assess' | 'migrate'
+  mode: 'assess' | 'migrate',
+  componentInstanceProperties?: FlexiComponentInstanceProperty[]
 ): { componentName: string; identifier: string; props: Record<string, string> } {
   let migratedCardName: FlexcardStorage;
   if (mode === 'assess') {
@@ -232,9 +251,20 @@ function createNewPropsForFlexCard(
     throw new DuplicateKeyError(nameKey, 'Flexcard');
   }
 
-  const newProps = {
+  const newProps: Record<string, string> = {
     flexcardName: migratedCardName.name,
   };
+
+  // Pass through recordId and objectApiName if present in the source component
+  if (componentInstanceProperties) {
+    const passthroughPropsFC = ['recordId', 'objectApiName'];
+    for (const propName of passthroughPropsFC) {
+      const existingProp = componentInstanceProperties.find((prop) => prop.name === propName);
+      if (existingProp?.value) {
+        newProps[propName] = existingProp.value;
+      }
+    }
+  }
 
   return {
     componentName: targetComponentNameFlexCard,

@@ -300,6 +300,7 @@ export interface QueryResult {
 
 export interface FlexiPageAssessmentInfo extends FileChangeInfo {
   errors: string[];
+  summary?: string[];
   status:
     | 'Ready for migration'
     | 'Failed'

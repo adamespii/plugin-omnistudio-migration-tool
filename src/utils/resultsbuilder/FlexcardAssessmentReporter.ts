@@ -29,6 +29,7 @@ export class FlexcardAssessmentReporter {
     return {
       title: 'Flexcards Assessment Report',
       heading: 'Flexcards Assessment Report',
+      description: 'A high-level summary of the actions taken during the Omnistudio migration will appear here.',
       org: getOrgDetailsForReport(omnistudioOrgDetails),
       assessmentDate: new Date().toLocaleString(),
       total: flexCardAssessmentInfos?.length || 0,

@@ -29,6 +29,7 @@ export class DRAssessmentReporter {
     return {
       title: 'Data Mappers Assessment Report',
       heading: 'Data Mappers Assessment Report',
+      description: 'A high-level summary of the actions taken during the Omnistudio migration will appear here.',
       org: getOrgDetailsForReport(omnistudioOrgDetails),
       assessmentDate: new Date().toLocaleString(),
       total: dataRaptorAssessmentInfos?.length || 0,

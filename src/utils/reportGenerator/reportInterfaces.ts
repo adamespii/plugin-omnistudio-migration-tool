@@ -83,6 +83,7 @@ export interface ReportParam {
   rows: ReportRowParam[];
   rollbackFlags?: string[];
   callToAction?: CTASummary[];
+  description?: string; // Description message displayed below the heading in the report
   pagination?: {
     currentPage: number;
     totalPages: number;
