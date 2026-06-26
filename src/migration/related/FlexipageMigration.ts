@@ -194,6 +194,16 @@ export class FlexipageMigration extends BaseRelatedObjectMigration {
    * @param mode - The processing mode: 'assess' or 'migrate'
    * @returns FlexiPage assessment information with status and error details
    */
+  /**
+   * Process a single FlexiPage for assessment or migration.
+   *
+   * @param fileName - The FlexiPage file name
+   * @param filePath - Full path to the FlexiPage file
+   * @param mode - 'assess' or 'migrate'
+   * @param json - Pre-parsed XML object (avoids re-parsing inside this method)
+   * @param fileContent - Raw XML string (used for generating diff between original and transformed)
+   * @param summary - Conversion summary lines (e.g. "1 OmniScript will migrate to runtime_omnistudio:omniscript")
+   */
   private processFlexiPage(
     fileName: string,
     filePath: string,
