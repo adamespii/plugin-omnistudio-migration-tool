@@ -133,10 +133,16 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
     const simpleName = remoteClass.includes('.') ? remoteClass.split('.').pop() : remoteClass;
     console.log('simpleName', simpleName);
     if (this.hookRegisteredClasses.has(simpleName)) return true;
-    // Check if remoteMethod references a hooked class via VOI pattern (e.g., "CpqAppHandler-getCartsItems")
-    if (remoteMethod && remoteMethod.includes('-')) {
-      const delegateClass = remoteMethod.split('-')[0];
-      if (this.hookRegisteredClasses.has(delegateClass)) return true;
+    // Check if remoteMethod references a hooked class via VOI pattern
+    // Supports both "CpqAppHandler-getCartsItems" and "CpqAppHandler.getCartsItems" delimiters
+    if (remoteMethod) {
+      let delegateClass: string | undefined;
+      if (remoteMethod.includes('-')) {
+        delegateClass = remoteMethod.split('-')[0];
+      } else if (remoteMethod.includes('.')) {
+        delegateClass = remoteMethod.split('.')[0];
+      }
+      if (delegateClass && this.hookRegisteredClasses.has(delegateClass)) return true;
     }
     return false;
   }
