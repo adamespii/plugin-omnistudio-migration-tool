@@ -89,12 +89,12 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
   }
 
   private async loadHookRegistrations(): Promise<Set<string>> {
+    const classes = new Set<string>();
     try {
       const objectName = `${this.namespacePrefix}CustomClassImplementation__c`;
       console.log(`SELECT Id, Name FROM ${objectName} LIMIT 200`);
       const soql = `SELECT Id, Name FROM ${objectName} LIMIT 200`;
       const result = await this.connection.query(soql);
-      const classes = new Set<string>();
       console.log('result', result);
       if (result.totalSize > 0) {
         for (const record of result.records as any[]) {
@@ -104,19 +104,41 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
           }
         }
       }
-      return classes;
     } catch (e) {
       Logger.warn('Unable to query CustomClassImplementation__c for hook registrations: ' + e);
-      return new Set();
     }
+
+    try {
+      const interfaceObjectName = `${this.namespacePrefix}InterfaceImplementation__c`;
+      const interfaceSoql = `SELECT Id, Name, ${this.namespacePrefix}ImplementationClassName__c FROM ${interfaceObjectName} WHERE Name LIKE '%Hook%' LIMIT 200`;
+      const interfaceResult = await this.connection.query(interfaceSoql);
+      if (interfaceResult.totalSize > 0) {
+        for (const record of interfaceResult.records as any[]) {
+          const hookName: string = record.Name || '';
+          if (hookName.endsWith('Hook')) {
+            classes.add(hookName.substring(0, hookName.length - 4));
+          }
+        }
+      }
+    } catch (e) {
+      Logger.warn('Unable to query InterfaceImplementation__c for hook registrations: ' + e);
+    }
+
+    return classes;
   }
 
-  private hasHookForClass(remoteClass: string): boolean {
+  private hasHookForClass(remoteClass: string, remoteMethod?: string): boolean {
     console.log('hasHookForClass remoteClass', remoteClass);
     if (this.hookRegisteredClasses.size === 0 || !remoteClass) return false;
     const simpleName = remoteClass.includes('.') ? remoteClass.split('.').pop() : remoteClass;
     console.log('simpleName', simpleName);
-    return this.hookRegisteredClasses.has(simpleName);
+    if (this.hookRegisteredClasses.has(simpleName)) return true;
+    // Check if remoteMethod references a hooked class via VOI pattern (e.g., "CpqAppHandler-getCartsItems")
+    if (remoteMethod && remoteMethod.includes('-')) {
+      const delegateClass = remoteMethod.split('-')[0];
+      if (this.hookRegisteredClasses.has(delegateClass)) return true;
+    }
+    return false;
   }
 
   getName(
@@ -557,7 +579,7 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
             namespaceErrors.push(this.messages.getMessage('apexClassNotFound', [className, nameVal]));
           }
         }
-        if (className && this.hasHookForClass(className)) {
+        if (className && this.hasHookForClass(className, methodName)) {
           hookEnabledSteps.push(nameVal);
         }
       }
@@ -2499,7 +2521,7 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
       propSetMap.remoteClass = this.apexNamespaceRegistry.getQualifiedClassName(propSetMap.remoteClass);
     }
 
-    if (this.hasHookForClass(propSetMap.remoteClass)) {
+    if (this.hasHookForClass(propSetMap.remoteClass, propSetMap.remoteMethod)) {
       console.log('remoteClass', propSetMap.remoteClass);
       const remoteOptions = propSetMap['remoteOptions'] || {};
       remoteOptions['PreHook'] = true;

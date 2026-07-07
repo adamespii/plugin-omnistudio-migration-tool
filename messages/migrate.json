@@ -342,5 +342,6 @@
   "processingNotRequired": "Migration is not required for orgs on standard data model with the Omnistudio Metadata setting turned on.",
   "skippingTruncation": "Skipping truncation as the org is on standard data model.",
   "loglevelFlagDeprecated": "loglevel is deprecated. Use --verbose instead.",
-  "prePostHookAutoEnabled": "PreHook/PostHook will be auto-enabled on Remote Action step(s): %s. A hook implementation is registered for the remote class used by these steps."
+  "prePostHookAutoEnabled": "PreHook/PostHook will be auto-enabled on Remote Action step(s): %s. A hook implementation is registered for the remote class used by these steps.",
+  "corruptedParentChildLevel": "%s has elements with corrupted parent-child hierarchy. The following elements have their parent and child persisted at the same level, which will cause data loss after migration: %s. Create a new version of this %s to fix the issue before migrating."
 }
