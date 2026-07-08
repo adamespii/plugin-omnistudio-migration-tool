@@ -20,6 +20,7 @@ interface InstalledPackage {
 interface OrgDetails {
   Name: string;
   Id: string;
+  NamespacePrefix?: string;
 }
 
 export interface OmnistudioOrgDetails {
@@ -31,6 +32,7 @@ export interface OmnistudioOrgDetails {
   rollbackFlags?: string[];
   isFoundationPackage: boolean;
   isOmnistudioMetadataAPIEnabled: boolean;
+  isOrgOwnedNamespace?: boolean;
 }
 
 export interface PackageDetail {
@@ -276,7 +278,7 @@ export class OrgUtils {
   private static readonly objectName = 'Publisher';
 
   // Define the fields to retrieve from the Organization object
-  private static readonly orgFields = ['Name'];
+  private static readonly orgFields = ['Name', 'NamespacePrefix'];
 
   // Define the object name for querying installed packages
   private static readonly orgObjectName = 'Organization';
@@ -314,6 +316,8 @@ export class OrgUtils {
       version: '',
       namespace: '',
     };
+
+    let isOrgOwnedNamespace = false;
 
     const installedOmniPackages = [];
     for (const pkg of allInstalledPackages) {
@@ -357,16 +361,27 @@ export class OrgUtils {
       packageDetails.version = `${pkg.MajorVersion}.${pkg.MinorVersion}`;
       packageDetails.namespace = pkg.NamespacePrefix;
     } else {
-      // return to validate the org information
-      return {
-        packageDetails: undefined,
-        omniStudioOrgPermissionEnabled: false,
-        orgDetails: orgDetails[0],
-        dataModel: undefined,
-        hasValidNamespace: false,
-        isFoundationPackage: false,
-        isOmnistudioMetadataAPIEnabled: false,
-      };
+      // No packages found in Publisher object - check if org has a registered namespace
+      const orgNamespace = orgDetails[0]?.NamespacePrefix;
+      if (orgNamespace && this.namespaces.has(orgNamespace)) {
+        // Org has a valid Omnistudio namespace registered
+        packageDetails.namespace = orgNamespace;
+        packageDetails.version = '0.0'; // Version unknown for org-owned namespace
+        isOrgOwnedNamespace = true;
+        Logger.log(`Using org-registered namespace: ${orgNamespace} (no managed package installed)`);
+      } else {
+        // return to validate the org information
+        return {
+          packageDetails: undefined,
+          omniStudioOrgPermissionEnabled: false,
+          orgDetails: orgDetails[0],
+          dataModel: undefined,
+          hasValidNamespace: false,
+          isFoundationPackage: false,
+          isOmnistudioMetadataAPIEnabled: false,
+          isOrgOwnedNamespace: false,
+        };
+      }
     }
 
     //Execute apex rest resource to get omnistudio org permission
@@ -399,6 +414,7 @@ export class OrgUtils {
       hasValidNamespace: hasValidNamespace,
       isFoundationPackage: isFoundationPackage,
       isOmnistudioMetadataAPIEnabled: isOmnistudioMetadataAPIEnabled,
+      isOrgOwnedNamespace: isOrgOwnedNamespace,
     };
   }
 
