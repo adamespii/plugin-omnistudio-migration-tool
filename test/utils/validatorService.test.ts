@@ -1371,4 +1371,61 @@ describe('ValidatorService', () => {
       expect(loggerErrorStub.firstCall.args[0]).to.equal('DR versioning is enabled');
     });
   });
+
+  describe('validate with org-owned namespace', () => {
+    it('should skip the license check in migration mode when isOrgOwnedNamespace is true', async () => {
+      // Arrange: custom data model, migration mode, no managed package but org owns the namespace
+      const orgs: OmnistudioOrgDetails = {
+        hasValidNamespace: true,
+        packageDetails: { namespace: 'devops001gs0' },
+        omniStudioOrgPermissionEnabled: false,
+        isFoundationPackage: false,
+        isOrgOwnedNamespace: true,
+      } as OmnistudioOrgDetails;
+      sandbox.stub(OrgPreferences, 'checkDRVersioning').resolves(false);
+      (messages.getMessage as sinon.SinonStub)
+        .withArgs('validatingDrVersioningDisabled')
+        .returns('Validating DR versioning disabled');
+      (messages.getMessage as sinon.SinonStub).withArgs('drVersioningDisabled').returns('DR versioning is disabled');
+      isStandardDataModelStub.returns(false); // Custom data model
+      const validator = new ValidatorService(orgs, messages, connection);
+
+      // Act
+      const result = await validator.validate(false); // isAssessment = false (migration mode)
+
+      // Assert
+      expect(result).to.be.true; // Passes without an OmniStudio license
+      expect(loggerLogVerboseStub.calledWith('Skipping license check for org-owned namespace')).to.be.true;
+      // No license query should be issued (DR versioning uses OrgPreferences, which is stubbed)
+      expect((connection.query as sinon.SinonStub).called).to.be.false;
+    });
+
+    it('should still run the license check in migration mode when isOrgOwnedNamespace is false', async () => {
+      // Arrange
+      const orgs: OmnistudioOrgDetails = {
+        hasValidNamespace: true,
+        packageDetails: { namespace: 'TestNamespace' },
+        omniStudioOrgPermissionEnabled: false,
+        isFoundationPackage: false,
+        isOrgOwnedNamespace: false,
+      } as OmnistudioOrgDetails;
+      const queryResult = { records: [{ total: '5' }] };
+      (connection.query as sinon.SinonStub).resolves(queryResult);
+      sandbox.stub(OrgPreferences, 'checkDRVersioning').resolves(false);
+      (messages.getMessage as sinon.SinonStub)
+        .withArgs('validatingDrVersioningDisabled')
+        .returns('Validating DR versioning disabled');
+      (messages.getMessage as sinon.SinonStub).withArgs('drVersioningDisabled').returns('DR versioning is disabled');
+      isStandardDataModelStub.returns(false); // Custom data model
+      const validator = new ValidatorService(orgs, messages, connection);
+
+      // Act
+      const result = await validator.validate(false); // isAssessment = false (migration mode)
+
+      // Assert
+      expect(result).to.be.true;
+      expect((connection.query as sinon.SinonStub).calledOnce).to.be.true; // License query SHOULD run
+      expect(loggerLogVerboseStub.calledWith('Skipping license check for org-owned namespace')).to.be.false;
+    });
+  });
 });
