@@ -39,9 +39,15 @@ export class ValidatorService {
     }
 
     // For custom data model, validate if licenses are valid
-    // Skip license check during assessment
+    // Skip license check during assessment or for org-owned namespaces
     if (isAssessment) {
       Logger.logVerbose(this.messages.getMessage('skippingLicenseCheckForAssessment'));
+      return true;
+    }
+
+    // Skip license check for org-owned namespaces (developer orgs building with the namespace)
+    if (this.orgs.isOrgOwnedNamespace) {
+      Logger.logVerbose('Skipping license check for org-owned namespace');
       return true;
     }
 
