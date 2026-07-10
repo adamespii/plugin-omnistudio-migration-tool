@@ -70,6 +70,13 @@ export class OmniScriptInstanceMigrationTool extends BaseMigrationTool implement
         return [];
       }
 
+      // verify custom field PackageSavedSessionId__c exists in OmniScriptSavedSession
+      const hasStandardField = await this.hasStandardFieldPackageSavedSessionId();
+      if (!hasStandardField) {
+        Logger.log(this.messages.getMessage('ossMissingStandardField'));
+        return [];
+      }
+
       Logger.log(
         this.messages.getMessage('startingOmniScriptAssessment', [Constants.OmniScriptSavedSessionsDisplayName])
       );
@@ -137,9 +144,9 @@ export class OmniScriptInstanceMigrationTool extends BaseMigrationTool implement
 
     try {
       // verify custom field PackageSavedSessionId__c exists in OmniScriptSavedSession
-      const hasCustomField = await this.hasCustomFieldPackageSavedSessionId();
-      if (!hasCustomField) {
-        Logger.error(this.messages.getMessage('ossMissingCustomField'));
+      const hasStandardField = await this.hasStandardFieldPackageSavedSessionId();
+      if (!hasStandardField) {
+        Logger.log(this.messages.getMessage('ossMissingStandardField'));
         return [];
       }
 
@@ -439,7 +446,9 @@ export class OmniScriptInstanceMigrationTool extends BaseMigrationTool implement
     delete savedSessionData['OmniScriptLanguage'];
     savedSessionData['Name'] = osInstanceName;
     savedSessionData['OmniScriptId'] = targetOmniProcessId;
-    savedSessionData['PackageSavedSessionId__c'] = osInstanceId;
+    if (savedSessionData['ManagedPkgSessKey']) {
+      savedSessionData['ManagedPkgSessKey'] = osInstanceId;
+    }
 
     // Upload to OmniScriptSavedSession
     const omniscriptSavedSessionResult: CreateOmniscriptSavedSessionResult =
@@ -815,10 +824,17 @@ export class OmniScriptInstanceMigrationTool extends BaseMigrationTool implement
     }
   }
 
-  private async hasCustomFieldPackageSavedSessionId(): Promise<boolean> {
-    const fields = ['Name', 'PackageSavedSessionId__c'];
+  /**
+   * Checks if Omniscript Saved Session has the standard field, ManagedPackageSessKey
+   * if true, 264+
+   * if false 262 and before
+   *
+   * @returns true or false
+   */
+  private async hasStandardFieldPackageSavedSessionId(): Promise<boolean> {
+    const fields = ['Name', '	ManagedPkgSessKey'];
     /**
-     * SELECT Name, PackageSavedSessionId__c FROM OmniscriptSavedSession LIMIT 1
+     * SELECT Name, ManagedPkgSessKey FROM OmniscriptSavedSession LIMIT 1
      */
     const queryString = `SELECT ${fields.join(',')} 
                         FROM ${Constants.OmniScriptSavedSessionObjectName} 
@@ -828,8 +844,6 @@ export class OmniScriptInstanceMigrationTool extends BaseMigrationTool implement
       await QueryTools.queryCustom(this.connection, queryString);
       return true;
     } catch (err: unknown) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      Logger.error('Does not have PackageSavedSessionId__c', error);
       return false;
     }
   }

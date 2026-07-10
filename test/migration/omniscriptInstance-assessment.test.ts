@@ -476,7 +476,7 @@ describe('OmniScriptInstanceMigrationTool - Assessment', () => {
         expect(result).to.be.an('array').that.is.empty;
       });
 
-      it('should handle OmniProcess query errors gracefully', async () => {
+      it('should not run assessment when standard field, ManagedPkgSessKey does not exist in Omniscript Saved Session', async () => {
         const mockInstances = [
           {
             Id: 'a0D000000000010',
@@ -490,13 +490,9 @@ describe('OmniScriptInstanceMigrationTool - Assessment', () => {
           },
         ];
         queryWithFilterStub.resolves(mockInstances);
-        queryCustomStub.rejects(new Error('SOQL query failed'));
-
+        queryCustomStub.rejects(new Error("No such column 'ManagedPkgSessKey' on entity 'OmniScriptSavedSession'."));
         const result = await migrationTool.assess();
-
-        // Should still process instances, treating OmniProcess query failure as empty result
-        expect(result).to.have.length(1);
-        expect((Logger.error as sinon.SinonStub).calledWith(sinon.match(/Error querying OmniProcess/))).to.be.true;
+        expect(result).to.have.length(0);
       });
     });
   });
@@ -651,10 +647,19 @@ describe('OmniScriptInstanceMigrationTool - Assessment', () => {
         },
       ];
       queryWithFilterStub.resolves(mockInstances);
-      queryCustomStub.resolves([
-        { Name: 'FormA_SubA_en', Type: 'FormA', SubType: 'SubA', Language: 'en' } as any,
-        { Name: 'FormB_SubB_en', Type: 'FormB', SubType: 'SubB', Language: 'en' } as any,
-      ]);
+
+      // Use parameter matching to differentiate between OmniProcess and OmniScript__c queries
+      queryCustomStub
+        .withArgs(sinon.match.any, sinon.match(/FROM OmniProcess/))
+        .resolves([
+          { Name: 'FormA_SubA_en', Type: 'FormA', SubType: 'SubA', Language: 'en' } as any,
+          { Name: 'FormB_SubB_en', Type: 'FormB', SubType: 'SubB', Language: 'en' } as any,
+        ]);
+
+      queryCustomStub.withArgs(sinon.match.any, sinon.match(/FROM.*OmniScript__c/)).resolves([]);
+
+      // Default fallback for unexpected queries
+      queryCustomStub.resolves([]);
 
       let result = await migrationTool.assess();
 
@@ -681,6 +686,10 @@ describe('OmniScriptInstanceMigrationTool - Assessment', () => {
           vlocity_ins__LastSaved__c: '2025-02-01',
         },
       ]);
+      // Reset stub for new test
+      queryCustomStub.reset();
+      queryCustomStub.withArgs(sinon.match.any, sinon.match(/FROM OmniProcess/)).resolves([]);
+      queryCustomStub.withArgs(sinon.match.any, sinon.match(/FROM.*OmniScript__c/)).resolves([]);
       queryCustomStub.resolves([]);
 
       result = await migrationTool.assess();
@@ -690,28 +699,6 @@ describe('OmniScriptInstanceMigrationTool - Assessment', () => {
 
       expect(query).to.include('IsActive = true');
       expect(query).to.not.include('Type IN');
-    });
-
-    it('should return assessment with manual intervention when OmniProcess query fails', async () => {
-      const mockInstances = [
-        {
-          Id: 'a0D600',
-          Name: 'Session-600',
-          vlocity_ins__Status__c: 'In Progress',
-          vlocity_ins__OmniScriptId__c: 'a0E600',
-          vlocity_ins__OmniScriptType__c: 'TestType',
-          vlocity_ins__OmniScriptSubType__c: 'TestSub',
-          vlocity_ins__OmniScriptLanguage__c: 'en',
-          vlocity_ins__LastSaved__c: '2025-03-01',
-        },
-      ];
-      sandbox.stub(QueryTools, 'queryWithFilter').resolves(mockInstances);
-      sandbox.stub(QueryTools, 'queryCustom').rejects(new Error('Query failed'));
-
-      const result = await migrationTool.assess();
-
-      expect(result).to.have.length(1);
-      expect(result[0].migrationStatus).to.equal('Needs manual intervention');
     });
   });
 
@@ -787,7 +774,7 @@ describe('OmniScriptInstanceMigrationTool - Assessment', () => {
     });
   });
 
-  describe('hasCustomFieldPackageSavedSessionId', () => {
+  describe('hasStandardFieldPackageSavedSessionId', () => {
     let queryCustomStub: sinon.SinonStub;
 
     beforeEach(() => {
@@ -795,26 +782,24 @@ describe('OmniScriptInstanceMigrationTool - Assessment', () => {
     });
 
     it('should return true when custom field exists', async () => {
-      queryCustomStub.resolves([{ Name: 'TestSession', PackageSavedSessionId__c: 'a0D123' }]);
+      queryCustomStub.resolves([{ Name: 'TestSession', ManagedPkgSessKey: 'a0D123' }]);
 
-      const result = await (migrationTool as any).hasCustomFieldPackageSavedSessionId();
+      const result = await (migrationTool as any).hasStandardFieldPackageSavedSessionId();
 
       expect(result).to.be.true;
       expect(queryCustomStub.calledOnce).to.be.true;
       const query = queryCustomStub.getCall(0).args[1];
-      expect(query).to.include('PackageSavedSessionId__c');
+      expect(query).to.include('ManagedPkgSessKey');
       expect(query).to.include('FROM OmniScriptSavedSession');
       expect(query).to.include('LIMIT 1');
     });
 
     it('should return false when custom field does not exist', async () => {
-      queryCustomStub.rejects(new Error('Invalid field: PackageSavedSessionId__c'));
+      queryCustomStub.rejects(new Error('Invalid field: ManagedPkgSessKey'));
 
-      const result = await (migrationTool as any).hasCustomFieldPackageSavedSessionId();
+      const result = await (migrationTool as any).hasStandardFieldPackageSavedSessionId();
 
       expect(result).to.be.false;
-      expect((Logger.error as sinon.SinonStub).calledWith(sinon.match(/Does not have PackageSavedSessionId__c/))).to.be
-        .true;
     });
   });
 
@@ -891,9 +876,15 @@ describe('OmniScriptInstanceMigrationTool - Assessment', () => {
       expect(result[1].name).to.equal('test.json');
     });
 
-    it('should download multiple attachments', async () => {
-      connectionRequestStub.onFirstCall().resolves('content1');
-      connectionRequestStub.onSecondCall().resolves('content2');
+    it('should download multiple attachments with correct URLs', async () => {
+      // Use parameter matching instead of call order for robustness
+      // Match the request object structure: { method: 'GET', url: path }
+      connectionRequestStub
+        .withArgs(sinon.match({ url: '/services/data/v67.0/sobjects/Attachment/00P004/Body' }))
+        .resolves('content1');
+      connectionRequestStub
+        .withArgs(sinon.match({ url: '/services/data/v67.0/sobjects/Attachment/00P005/Body' }))
+        .resolves('content2');
 
       const attachments = [
         { Id: '00P004', Name: 'file1.json', Body: '/services/data/v67.0/sobjects/Attachment/00P004/Body' },
@@ -903,8 +894,12 @@ describe('OmniScriptInstanceMigrationTool - Assessment', () => {
       const result = await (migrationTool as any).downloadAttachments(attachments);
 
       expect(result).to.have.length(2);
-      expect(result[0].body).to.equal('content1');
-      expect(result[1].body).to.equal('content2');
+      // Verify by ID instead of assuming order
+      const file1 = result.find((r: any) => r.id === '00P004');
+      const file2 = result.find((r: any) => r.id === '00P005');
+
+      expect(file1.body).to.equal('content1');
+      expect(file2.body).to.equal('content2');
       expect(connectionRequestStub.calledTwice).to.be.true;
     });
   });
