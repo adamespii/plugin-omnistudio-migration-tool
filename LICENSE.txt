@@ -1,8 +1,6 @@
 Copyright (c) 2018, Salesforce.com, Inc.
 All rights reserved.
 
-Welcome to the Omnistudio Migration Assistant Pilot. This is a pilot tool release and your feedback is invaluable. This migration assistant which is provided for pilot evaluation purposes only and Pilot participants agree to provide feedback as requested.
-
 Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
 
 * Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
