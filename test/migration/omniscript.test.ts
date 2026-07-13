@@ -428,6 +428,52 @@ describe('OmniScriptMigrationTool - Remote Action PreHook/PostHook', () => {
     });
   });
 
+  describe('loadHookRegistrations() on Foundation Package orgs', () => {
+    it('should skip both CustomClassImplementation__c and InterfaceImplementation__c queries', async () => {
+      // Re-initialize DataModelService with isFoundationPackage=true to mimic an
+      // "SDM + OmniStudio Foundation Package" org (W-23350132 repro).
+      initializeDataModelService({
+        packageDetails: { version: '1.0.0', namespace: 'omnistudio' },
+        omniStudioOrgPermissionEnabled: true,
+        orgDetails: { Name: 'Test Org', Id: '00D000000000000' },
+        dataModel: 'Standard',
+        hasValidNamespace: true,
+        isFoundationPackage: true,
+        isOmnistudioMetadataAPIEnabled: true,
+      } as any);
+
+      const namespace = 'omnistudio';
+      const tool = createTool(namespace);
+
+      mockConnection.query.callsFake((soql: string) => {
+        if (soql.includes('CustomClassImplementation__c') || soql.includes('InterfaceImplementation__c')) {
+          // These queries must NOT run on Foundation orgs.
+          return Promise.reject(new Error('Unexpected hook-registration query on Foundation org'));
+        }
+        if (soql.includes('OmniScript__c')) {
+          return Promise.resolve({ totalSize: 0, records: [] });
+        }
+        return Promise.resolve({ totalSize: 0, records: [] });
+      });
+
+      // Invoke the private method directly via bracket access — a full migrate() run
+      // needs a large amount of scaffolding and this test only cares about the guard.
+      const result: Set<string> = await (tool as any).loadHookRegistrations();
+
+      expect(result.size).to.equal(0);
+      const hookQueryCalls = mockConnection.query
+        .getCalls()
+        .filter(
+          (call: sinon.SinonSpyCall) =>
+            typeof call.args[0] === 'string' &&
+            (call.args[0].includes('CustomClassImplementation__c') ||
+              call.args[0].includes('InterfaceImplementation__c'))
+        );
+      expect(hookQueryCalls).to.have.lengthOf(0);
+      expect((Logger.warn as sinon.SinonStub).called).to.equal(false);
+    });
+  });
+
   describe('migrate() when CustomClassImplementation__c query fails', () => {
     it('should default to false and not set hooks', async () => {
       const namespace = 'vlocity_ins';
