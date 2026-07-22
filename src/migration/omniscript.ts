@@ -39,7 +39,11 @@ import { StringVal } from '../utils/StringValue/stringval';
 import { Logger } from '../utils/logger';
 import { createProgressBar } from './base';
 import { StorageUtil } from '../utils/storageUtil';
-import { isStandardDataModel, isStandardDataModelWithMetadataAPIEnabled } from '../utils/dataModelService';
+import {
+  isFoundationPackage,
+  isStandardDataModel,
+  isStandardDataModelWithMetadataAPIEnabled,
+} from '../utils/dataModelService';
 import { prioritizeCleanNamesFirst } from '../utils/recordPrioritization';
 import { Constants } from '../utils/constants/stringContants';
 import { ApexNamespaceRegistry, ApexResolveStatus } from './ApexNamespaceRegistry';
@@ -90,6 +94,17 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
 
   private async loadHookRegistrations(): Promise<Set<string>> {
     const classes = new Set<string>();
+
+    // CustomClassImplementation__c and InterfaceImplementation__c ship only in the
+    // Vlocity vertical managed packages (vlocity_cmt, vlocity_ins, vlocity_ps). The
+    // OmniStudio Foundation Package (namespace omnistudio) does not provision these
+    // objects, and Core-side PlatformInvokeServiceImpl filters omnistudio /
+    // omnistudiocore out of hook orchestration. Skip the queries on Foundation orgs
+    // so we don't emit spurious INVALID_TYPE warnings during assess.
+    if (isFoundationPackage()) {
+      return classes;
+    }
+
     try {
       const objectName = `${this.namespacePrefix}CustomClassImplementation__c`;
       const soql = `SELECT Id, Name FROM ${objectName} LIMIT 200`;
