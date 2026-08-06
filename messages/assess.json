@@ -254,5 +254,6 @@
   "errorDuringSaveForLaterAssessment": "Errors occurred during the Save for Later assessment:",
   "prePostHookAutoEnabled": "PreHook/PostHook will be auto-enabled on Remote Action step(s): %s. A hook implementation is registered for the remote class used by these steps.",
   "flexipageOsWrapperSummary": "OmniScript component will migrate from vlocityLWCOmniWrapper to runtime_omnistudio:omniscript",
-  "flexipageFcWrapperSummary": "FlexCard component will migrate from vlocityLWCOmniWrapper to runtime_omnistudio:flexcard"
+  "flexipageFcWrapperSummary": "FlexCard component will migrate from vlocityLWCOmniWrapper to runtime_omnistudio:flexcard",
+  "ossMissingStandardField": "The field ManagedPkgSessKey is missing from OmniscriptSavedSession. This field is only available in 264."
 }
