@@ -328,7 +328,6 @@ export class ExperienceSiteMigration extends BaseRelatedObjectMigration {
 
     Logger.logVerbose(this.messages.getMessage('targetData', [JSON.stringify(targetDataFromStorageFC)]));
 
-    // Remove later
     if (this.shouldAddWarning(targetDataFromStorageFC)) {
       const warningMsg: string = this.getWarningMessage(flexcardName, targetDataFromStorageFC);
       experienceSiteAssessmentInfo.warnings.push(warningMsg);
@@ -366,8 +365,10 @@ export class ExperienceSiteMigration extends BaseRelatedObjectMigration {
     } else {
       component.componentName = TARGET_COMPONENT_NAME_OS;
 
-      // Preserve the layout value before clearing
+      // Preserve the layout value and prefill before clearing
       const originalLayout = currentAttribute['layout'];
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const originalPrefill = currentAttribute['prefill'];
 
       // Clear existing properties more safely - preserve any properties we don't want to delete
       const keysToDelete = ['layout', 'params', 'standAlone', 'target'];
@@ -381,6 +382,12 @@ export class ExperienceSiteMigration extends BaseRelatedObjectMigration {
       currentAttribute['subType'] = targetDataFromStorage.subtype;
       currentAttribute['theme'] = originalLayout;
       currentAttribute['type'] = targetDataFromStorage.type;
+
+      // Pass through prefill if present (supported since release 264 / API 68+)
+      if (originalPrefill) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        currentAttribute['prefill'] = originalPrefill;
+      }
     }
   }
 
@@ -389,7 +396,7 @@ export class ExperienceSiteMigration extends BaseRelatedObjectMigration {
   }
 
   /**
-   * Check if component is an Omnistudio LWC component
+   * Check if component is an Omnistudio LWC component (runtime wrappers)
    */
   private isOmnistudioStandardWrapper(componentName: string): boolean {
     return (

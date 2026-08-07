@@ -29,6 +29,7 @@ export class SaveForLaterAssessmentReporter {
     return {
       title: 'OmniScript Saved Sessions Assessment Report',
       heading: 'OmniScript Saved Sessions Assessment Report',
+      description: 'A high-level summary of the actions taken during the Omnistudio migration will appear here.',
       org: getOrgDetailsForReport(omnistudioOrgDetails),
       assessmentDate: new Date().toLocaleString(),
       total: saveForLaterAssessmentInfos?.length || 0,

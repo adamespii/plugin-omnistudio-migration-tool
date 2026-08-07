@@ -31,13 +31,31 @@ export const createProgressBar = (action: string, type: ComponentType | RelatedO
   const noSpaceTypes = ['Omniscript', 'Integration Procedure', 'ExperienceSites'];
   const space = noSpaceTypes.includes(typeStr) ? '' : '\t\t\t\t';
 
-  return new cliProgress.SingleBar({
-    format: `${action} ${type} | ${space} {bar} | {percentage}% || {value}/{total} Tasks\n`,
+  const bar = new cliProgress.SingleBar({
+    format: `${action} ${type} | ${space} {bar} | {percentage}% || {value}/{total} Tasks`,
     barCompleteChar: '\u2588',
     barIncompleteChar: '\u2591',
     hideCursor: true,
     stopOnComplete: true,
   });
+
+  // Wrap start/stop to suppress stdout logging while the bar is active
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+  const originalStart: typeof bar.start = bar.start.bind(bar);
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+  const originalStop: typeof bar.stop = bar.stop.bind(bar);
+
+  bar.start = (total: number, startValue: number, payload?: Record<string, unknown>): void => {
+    Logger.setProgressBarActive(true);
+    originalStart(total, startValue, payload);
+  };
+
+  bar.stop = (): void => {
+    originalStop();
+    Logger.setProgressBarActive(false);
+  };
+
+  return bar;
 };
 
 export class BaseMigrationTool {

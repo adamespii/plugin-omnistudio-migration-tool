@@ -245,6 +245,8 @@ describe('FlexipageMigration', () => {
 
       mockFs.readdirSync.returns(testFiles);
       mockPath.join.returns(testFilePath);
+      mockFs.readFileSync.returns('<FlexiPage>test</FlexiPage>');
+      mockXmlUtil.parse.returns({ flexiPageRegions: [] });
 
       sandbox.stub(flexipageMigration as any, 'processFlexiPage').throws(new Error('Processing error'));
 
@@ -311,14 +313,13 @@ describe('FlexipageMigration', () => {
       const fileName = 'test.xml';
       const filePath = '/test/path/test.xml';
       const fileContent = '<FlexiPage>test content</FlexiPage>';
+      const json = { test: 'data', flexiPageRegions: [] };
 
-      mockFs.readFileSync.returns(fileContent);
-      mockXmlUtil.parse.returns({ FlexiPage: { test: 'data', flexiPageRegions: [] } });
       mockTransformFlexipageBundle.returns({ transformed: 'data', flexiPageRegions: [] });
       mockXmlUtil.build.returns('<FlexiPage>transformed</FlexiPage>');
 
       // Act
-      const result = (flexipageMigration as any).processFlexiPage(fileName, filePath, 'assess');
+      const result = (flexipageMigration as any).processFlexiPage(fileName, filePath, 'assess', json, fileContent, []);
 
       // Assert
       expect(result).to.deep.include({
@@ -339,13 +340,18 @@ describe('FlexipageMigration', () => {
       const transformedFlexipage: Flexipage = { transformed: 'data', flexiPageRegions: [] };
       const modifiedContent = '<FlexiPage>transformed</FlexiPage>';
 
-      mockFs.readFileSync.returns(fileContent);
-      mockXmlUtil.parse.returns({ FlexiPage: mockFlexipage });
       mockTransformFlexipageBundle.returns(transformedFlexipage);
       mockXmlUtil.build.returns(modifiedContent);
 
       // Act
-      const result = (flexipageMigration as any).processFlexiPage(fileName, filePath, 'migrate');
+      const result = (flexipageMigration as any).processFlexiPage(
+        fileName,
+        filePath,
+        'migrate',
+        mockFlexipage,
+        fileContent,
+        []
+      );
 
       // Assert
       expect(mockFs.writeFileSync.calledWith(filePath, modifiedContent)).to.be.true;
@@ -365,12 +371,17 @@ describe('FlexipageMigration', () => {
       const fileContent = '<FlexiPage>test content</FlexiPage>';
       const mockFlexipage: Flexipage = { test: 'data', flexiPageRegions: [] };
 
-      mockFs.readFileSync.returns(fileContent);
-      mockXmlUtil.parse.returns({ FlexiPage: mockFlexipage });
       mockTransformFlexipageBundle.returns(false);
 
       // Act
-      const result = (flexipageMigration as any).processFlexiPage(fileName, filePath, 'assess');
+      const result = (flexipageMigration as any).processFlexiPage(
+        fileName,
+        filePath,
+        'assess',
+        mockFlexipage,
+        fileContent,
+        []
+      );
 
       // Assert
       expect(result).to.be.null;
@@ -381,12 +392,14 @@ describe('FlexipageMigration', () => {
       const fileName = 'test.xml';
       const filePath = '/test/path/test.xml';
       const fileContent = '<FlexiPage>test content</FlexiPage>';
+      const mockFlexipage: Flexipage = { test: 'data', flexiPageRegions: [] };
 
-      mockFs.readFileSync.returns(fileContent);
-      mockXmlUtil.parse.throws(new Error('Parse error'));
+      mockTransformFlexipageBundle.throws(new Error('Parse error'));
 
       // Act & Assert
-      expect(() => (flexipageMigration as any).processFlexiPage(fileName, filePath, 'assess')).to.throw('Parse error');
+      expect(() =>
+        (flexipageMigration as any).processFlexiPage(fileName, filePath, 'assess', mockFlexipage, fileContent, [])
+      ).to.throw('Parse error');
     });
   });
 

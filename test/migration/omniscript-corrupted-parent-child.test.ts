@@ -45,7 +45,7 @@ describe('OmniScript — Corrupted Parent-Child Level Detection', () => {
     mockMessages = {
       getMessage: (key: string, args?: string[]) => {
         if (key === 'corruptedParentChildLevel') {
-          return `${args?.[0]} has elements with corrupted parent-child hierarchy. The following elements have their parent and child persisted at the same level, which will cause data loss after migration: ${args?.[1]}. Create a new version of this ${args?.[2]} to fix the issue before migrating.`;
+          return `${args?.[0]} has elements with an invalid parent-child hierarchy. These elements have their parent and child at the same level, which can cause data loss after migration: ${args?.[1]}. To fix this issue, create a new version of this ${args?.[2]} before migrating.`;
         }
         return `Mock message: ${key}`;
       },
@@ -119,7 +119,7 @@ describe('OmniScript — Corrupted Parent-Child Level Detection', () => {
       new Map<string, string>()
     );
 
-    expect(result.warnings.some((w: string) => w.includes('corrupted parent-child hierarchy'))).to.equal(true);
+    expect(result.warnings.some((w: string) => w.includes('invalid parent-child hierarchy'))).to.equal(true);
     expect(result.warnings.some((w: string) => w.includes('ChildAction'))).to.equal(true);
     expect(result.migrationStatus).to.equal('Needs manual intervention');
   });
@@ -144,7 +144,7 @@ describe('OmniScript — Corrupted Parent-Child Level Detection', () => {
       new Map<string, string>()
     );
 
-    expect(result.warnings.some((w: string) => w.includes('corrupted parent-child hierarchy'))).to.equal(false);
+    expect(result.warnings.some((w: string) => w.includes('invalid parent-child hierarchy'))).to.equal(false);
   });
 
   it('does not flag root-level elements without a parent', async () => {
@@ -167,7 +167,7 @@ describe('OmniScript — Corrupted Parent-Child Level Detection', () => {
       new Map<string, string>()
     );
 
-    expect(result.warnings.some((w: string) => w.includes('corrupted parent-child hierarchy'))).to.equal(false);
+    expect(result.warnings.some((w: string) => w.includes('invalid parent-child hierarchy'))).to.equal(false);
   });
 
   it('detects multiple corrupted elements in the same OmniScript', async () => {

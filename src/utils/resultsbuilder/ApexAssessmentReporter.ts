@@ -23,6 +23,7 @@ export class ApexAssessmentReporter {
     return {
       title: 'Apex Classes Assessment Report',
       heading: 'Apex Classes Assessment Report',
+      description: 'A high-level summary of the actions taken during the Omnistudio migration will appear here.',
       org: getOrgDetailsForReport(omnistudioOrgDetails),
       assessmentDate: new Date().toLocaleString(),
       total: apexAssessmentInfos?.length || 0,

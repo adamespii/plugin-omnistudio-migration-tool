@@ -1,26 +1,34 @@
 [
   {
+    "alias": [],
     "command": "omnistudio:migration:assess",
-    "plugin": "@salesforce/plugin-omnistudio-migration-tool",
-    "flags": ["allversions", "json", "loglevel", "only", "relatedobjects", "target-org", "verbose"],
-    "alias": []
+    "flagAliases": ["targetusername"],
+    "flagChars": ["a", "o", "r", "u"],
+    "flags": ["allversions", "flags-dir", "json", "loglevel", "only", "relatedobjects", "target-org", "verbose"],
+    "plugin": "@salesforce/plugin-omnistudio-migration-tool"
   },
   {
+    "alias": [],
     "command": "omnistudio:migration:clean",
-    "plugin": "@salesforce/plugin-omnistudio-migration-tool",
-    "flags": ["assess", "json", "target-org", "verbose"],
-    "alias": []
+    "flagAliases": ["targetusername"],
+    "flagChars": ["u"],
+    "flags": ["assess", "flags-dir", "json", "target-org", "verbose"],
+    "plugin": "@salesforce/plugin-omnistudio-migration-tool"
   },
   {
+    "alias": [],
     "command": "omnistudio:migration:info",
-    "plugin": "@salesforce/plugin-omnistudio-migration-tool",
-    "flags": ["allversions", "json", "name", "target-org", "verbose"],
-    "alias": []
+    "flagAliases": ["targetusername"],
+    "flagChars": ["a", "n", "u"],
+    "flags": ["allversions", "flags-dir", "json", "name", "target-org", "verbose"],
+    "plugin": "@salesforce/plugin-omnistudio-migration-tool"
   },
   {
+    "alias": [],
     "command": "omnistudio:migration:migrate",
-    "plugin": "@salesforce/plugin-omnistudio-migration-tool",
-    "flags": ["allversions", "json", "loglevel", "only", "relatedobjects", "target-org", "verbose"],
-    "alias": []
+    "flagAliases": ["targetusername"],
+    "flagChars": ["a", "o", "r", "u"],
+    "flags": ["allversions", "flags-dir", "json", "loglevel", "only", "relatedobjects", "target-org", "verbose"],
+    "plugin": "@salesforce/plugin-omnistudio-migration-tool"
   }
 ]

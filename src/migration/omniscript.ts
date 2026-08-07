@@ -39,7 +39,11 @@ import { StringVal } from '../utils/StringValue/stringval';
 import { Logger } from '../utils/logger';
 import { createProgressBar } from './base';
 import { StorageUtil } from '../utils/storageUtil';
-import { isStandardDataModel, isStandardDataModelWithMetadataAPIEnabled } from '../utils/dataModelService';
+import {
+  isFoundationPackage,
+  isStandardDataModel,
+  isStandardDataModelWithMetadataAPIEnabled,
+} from '../utils/dataModelService';
 import { prioritizeCleanNamesFirst } from '../utils/recordPrioritization';
 import { Constants } from '../utils/constants/stringContants';
 import { ApexNamespaceRegistry, ApexResolveStatus } from './ApexNamespaceRegistry';
@@ -89,11 +93,22 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
   }
 
   private async loadHookRegistrations(): Promise<Set<string>> {
+    const classes = new Set<string>();
+
+    // CustomClassImplementation__c and InterfaceImplementation__c ship only in the
+    // Vlocity vertical managed packages (vlocity_cmt, vlocity_ins, vlocity_ps). The
+    // OmniStudio Foundation Package (namespace omnistudio) does not provision these
+    // objects, and Core-side PlatformInvokeServiceImpl filters omnistudio /
+    // omnistudiocore out of hook orchestration. Skip the queries on Foundation orgs
+    // so we don't emit spurious INVALID_TYPE warnings during assess.
+    if (isFoundationPackage()) {
+      return classes;
+    }
+
     try {
       const objectName = `${this.namespacePrefix}CustomClassImplementation__c`;
-      const soql = `SELECT Id, Name FROM ${objectName} WHERE Name LIKE '%Hook' LIMIT 200`;
+      const soql = `SELECT Id, Name FROM ${objectName} LIMIT 200`;
       const result = await this.connection.query(soql);
-      const classes = new Set<string>();
       if (result.totalSize > 0) {
         for (const record of result.records as any[]) {
           const hookName: string = record.Name || '';
@@ -102,17 +117,45 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
           }
         }
       }
-      return classes;
     } catch (e) {
       Logger.warn('Unable to query CustomClassImplementation__c for hook registrations: ' + e);
-      return new Set();
     }
+
+    try {
+      const interfaceObjectName = `${this.namespacePrefix}InterfaceImplementation__c`;
+      const interfaceSoql = `SELECT Id, Name, ${this.namespacePrefix}ImplementationClassName__c FROM ${interfaceObjectName} WHERE Name LIKE '%Hook%' LIMIT 200`;
+      const interfaceResult = await this.connection.query(interfaceSoql);
+      if (interfaceResult.totalSize > 0) {
+        for (const record of interfaceResult.records as any[]) {
+          const hookName: string = record.Name || '';
+          if (hookName.endsWith('Hook')) {
+            classes.add(hookName.substring(0, hookName.length - 4));
+          }
+        }
+      }
+    } catch (e) {
+      Logger.warn('Unable to query InterfaceImplementation__c for hook registrations: ' + e);
+    }
+
+    return classes;
   }
 
-  private hasHookForClass(remoteClass: string): boolean {
+  private hasHookForClass(remoteClass: string, remoteMethod?: string): boolean {
     if (this.hookRegisteredClasses.size === 0 || !remoteClass) return false;
     const simpleName = remoteClass.includes('.') ? remoteClass.split('.').pop() : remoteClass;
-    return this.hookRegisteredClasses.has(simpleName);
+    if (this.hookRegisteredClasses.has(simpleName)) return true;
+    // Check if remoteMethod references a hooked class via VOI pattern
+    // Supports both "CpqAppHandler-getCartsItems" and "CpqAppHandler.getCartsItems" delimiters
+    if (remoteMethod) {
+      let delegateClass: string | undefined;
+      if (remoteMethod.includes('-')) {
+        delegateClass = remoteMethod.split('-')[0];
+      } else if (remoteMethod.includes('.')) {
+        delegateClass = remoteMethod.split('.')[0];
+      }
+      if (delegateClass && this.hookRegisteredClasses.has(delegateClass)) return true;
+    }
+    return false;
   }
 
   getName(
@@ -553,7 +596,7 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
             namespaceErrors.push(this.messages.getMessage('apexClassNotFound', [className, nameVal]));
           }
         }
-        if (className && this.hasHookForClass(className)) {
+        if (className && this.hasHookForClass(className, methodName)) {
           hookEnabledSteps.push(nameVal);
         }
       }
@@ -2554,7 +2597,7 @@ export class OmniScriptMigrationTool extends BaseMigrationTool implements Migrat
       propSetMap.remoteClass = this.apexNamespaceRegistry.getQualifiedClassName(propSetMap.remoteClass);
     }
 
-    if (this.hasHookForClass(propSetMap.remoteClass)) {
+    if (this.hasHookForClass(propSetMap.remoteClass, propSetMap.remoteMethod)) {
       const remoteOptions = propSetMap['remoteOptions'] || {};
       remoteOptions['PreHook'] = true;
       remoteOptions['PostHook'] = true;

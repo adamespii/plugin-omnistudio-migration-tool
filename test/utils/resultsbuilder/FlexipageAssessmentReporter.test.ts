@@ -190,6 +190,7 @@ describe('FlexipageAssessmentReporter', () => {
           path: '/test/path1',
           diff: 'mock-diff-1',
           errors: [],
+          summary: ['OmniScript component will migrate from vlocityLWCOmniWrapper to runtime_omnistudio:omniscript'],
           status: 'Ready for migration',
         },
         {
@@ -207,7 +208,7 @@ describe('FlexipageAssessmentReporter', () => {
       // Assert
       expect(result).to.have.length(2);
 
-      // Check first row
+      // Check first row - has summary, no errors
       expect(result[0].rowId).to.match(/^flexipage-row-data-\d+$/);
       expect(result[0].data).to.have.length(5);
       expect(result[0].data[0].value).to.equal('TestPage1');
@@ -215,9 +216,13 @@ describe('FlexipageAssessmentReporter', () => {
       expect(result[0].data[2].value).to.equal('Ready for migration');
       expect(result[0].data[2].customClass).to.equal('text-success');
       expect(result[0].data[3].value).to.equal('');
-      expect(result[0].data[4].value).to.equal('No Errors');
+      // Summary column: no "Errors" label, but title contains the summary text
+      expect(result[0].data[4].value).to.equal('');
+      expect(result[0].data[4].title).to.deep.equal([
+        'OmniScript component will migrate from vlocityLWCOmniWrapper to runtime_omnistudio:omniscript',
+      ]);
 
-      // Check second row
+      // Check second row - has errors, no summary
       expect(result[1].data[0].value).to.equal('TestPage2');
       expect(result[1].data[1].value).to.equal('TestPage2.flexipage-meta.xml');
       expect(result[1].data[2].value).to.equal('Needs manual intervention');

@@ -14,9 +14,32 @@ The Omnistudio Migration Assistant is a Salesforce CLI plugin that automates the
 
 - To deploy LWC as part of auto-deployment process, environment variable 'OMA_AUTH_KEY' should be set with requested NPM repository access key from Salesforce Customer Support.
 
-- This tool requires Node Version 18+.
+## Supported Versions
 
-- LWC migration auto-deployment needs minimum node version of 18.17.1
+Install the following on your local workstation before running the plugin. Using versions outside these ranges is known to cause errors (for example, older `sf` CLI versions or Node 20 no longer boot the plugin correctly).
+
+| Dependency            | Supported / Recommended                                                                                   | Notes                                                                                                                                                               |
+| --------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Node.js               | **>= 22.0.0** (Node 24.x Active LTS recommended; Node 22.x Maintenance LTS, EOL Apr 2027, also supported) | Node 20 and older are end-of-life and not supported. Node 26 (Current) is expected to work but is not yet officially validated. LWC auto-deployment requires >= 22. |
+| Salesforce CLI (`sf`) | **>= 2.14.0** (latest stable recommended)                                                                 | The legacy `sfdx` CLI is deprecated. Older `sf` versions (< 2.14) are not supported.                                                                                |
+| npm                   | >= 10.0.0                                                                                                 | Ships with the supported Node versions above.                                                                                                                       |
+| Yarn (Classic)        | 1.22.x                                                                                                    | Required only if you are building the plugin from source.                                                                                                           |
+| Git                   | >= 2.30                                                                                                   | Required only if you are cloning and building the plugin from source.                                                                                               |
+| Operating System      | macOS 12+, Ubuntu 20.04+, Windows 10/11                                                                   | Any OS supported by the Salesforce CLI works.                                                                                                                       |
+
+Verify your local versions:
+
+```bash
+node --version   # should print v22.x, v24.x, or newer
+sf --version     # should print @salesforce/cli/2.14.x or newer
+npm --version
+```
+
+If `sf --version` reports a version older than 2.14, update it with:
+
+```bash
+npm install --global @salesforce/cli@latest
+```
 
 ## Install and Run the Omnistudio Migration Assistant
 
